@@ -1,0 +1,28 @@
+# Legible Consulting — client build and workspace template
+_min_copier_version: "9.0.0"
+_subdirectory: "templates/{{ tier }}"
+_answers_file: .copier-answers.yml
+
+tier:
+  type: str
+  help: What is being rendered?
+  choices:
+    site: site
+    app: app
+    platform: platform
+    icm-workspace: icm-workspace
+  default: site
+
+slug:
+  type: str
+  help: Repository slug, kebab-case (becomes the folder and the GitHub repo name)
+  validator: "{% if not slug | regex_search('^[a-z0-9][a-z0-9-]*$') %}kebab-case only{% endif %}"
+
+client_name:
+  type: str
+  help: The client's display name as it appears in documents
+
+language:
+  type: str
+  help: Language of client-facing text (BCP 47, e.g. pt-PT, en, nl, fr, de)
+  default: pt-PT
