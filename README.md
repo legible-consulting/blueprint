@@ -1,11 +1,11 @@
-# icm-method
+# blueprint
 
 Legible Consulting's method, public: one copier template with a `tier` question that renders
-a client build (`site`, `app`, `platform`) or a client's own ICM workspace (`icm-workspace`),
+a client build (`site`, `app`, `platform`) or a client's own ICM workspace (`workspace`),
 the conventions every rendered repo follows, and the workshop kit.
 
 ```bash
-copier copy gh:legible-consulting/icm-method ~/Desktop/Apps/projects/<slug>
+copier copy gh:legible-consulting/blueprint ~/Desktop/Apps/projects/<slug>
 copier update   # inside a rendered repo, after a new tag here
 ```
 

@@ -1,4 +1,4 @@
-# icm-method
+# blueprint
 
 Public template and conventions repo. Everything here is rendered into other repositories or
 read by workshop attendees, so: no client names, no contact details, no secrets, no internal

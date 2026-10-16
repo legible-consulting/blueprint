@@ -10,7 +10,7 @@ tier:
     site: site
     app: app
     platform: platform
-    icm-workspace: icm-workspace
+    workspace: workspace
   default: site
 
 slug:
