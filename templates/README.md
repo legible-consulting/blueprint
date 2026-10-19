@@ -10,3 +10,6 @@
 Each tier folder is a complete template root for copier (`_subdirectory` points here). `app`,
 `platform` and `workspace` render only the answers file and a README yet; their contents are
 Wave 1 (D2) work.
+
+Every tier renders `README.md` once. `copier update` never overwrites a `README.md` that exists
+(`_skip_if_exists` in `copier.yml`).
