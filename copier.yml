@@ -2,6 +2,9 @@
 _min_copier_version: "9.0.0"
 _subdirectory: "templates/{{ tier }}"
 _answers_file: .copier-answers.yml
+# A rendered or adopted repo keeps its own README: copy and update never overwrite it.
+_skip_if_exists:
+  - README.md
 
 tier:
   type: str
