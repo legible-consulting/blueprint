@@ -7,6 +7,6 @@
 | `platform` | the app tier plus the heavier pipeline | private |
 | `workspace` | a client's own ICM workspace for coaching | rendered into the client's account |
 
-Each tier folder is a complete template root for copier (`_subdirectory` points here). `README.md` is never overwritten by `copier copy` or `copier update` (`_skip_if_exists`): an adopted repo keeps its own. `app`,
+Each tier folder is a complete template root for copier (`_subdirectory` points here). `app`,
 `platform` and `workspace` render only the answers file and a README yet; their contents are
 Wave 1 (D2) work.
