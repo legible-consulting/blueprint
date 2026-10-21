@@ -93,7 +93,8 @@ jobs:
           done
           grep -qF "tier: ${TIER}" .github/workflows/ci.yml \
             || { echo "::error::${TIER}: ci.yml does not pass tier ${TIER}"; fail=1; }
-          ! grep -rqE '\{\{|\}\}' CLAUDE.md README.md .github .icm \
+          # A Jinja tag is {{ … }} or {% … %}. A GitHub Actions expression is ${{ … }} and stays.
+          ! grep -rqE '(^|[^$])\{\{|\{%' CLAUDE.md README.md .github .icm \
             || { echo "::error::${TIER}: an unrendered Jinja tag remains"; fail=1; }
           exit "$fail"
       - name: actionlint on the rendered workflows
