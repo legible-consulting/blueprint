@@ -1,9 +1,17 @@
 # Conventions
 
-What every rendered repo keeps, so that conformance (D4) has something to compare against:
+What every rendered repo keeps, whatever its tier. Estate conformance (D4 in the house)
+compares a repo against this list and against the blueprint tag its `.copier-answers.yml`
+names.
 
-- `CLAUDE.md` under 80 lines: identity and routing only.
-- Every stage folder carries a `CONTEXT.md` with Inputs, Process, Outputs.
-- `ci.yml` calls `legible-consulting/.github` reusable workflows; nothing is copied in.
-- Conventional Commits; the release is the merge of the release-please PR.
-- Secrets never in git; names only in the access table.
+| Convention | Rule |
+|---|---|
+| `CLAUDE.md` | Identity and routing only. Under 80 lines. Every rule carries its why where the why is not obvious. |
+| Tickets | `.icm/intake/`: an epic is a folder with `breakdown.md` and one stub per unit of work. A one-off is a triage stub. The path is the identity. The folder is the status. The contract is `.icm/intake/CONTEXT.md`, rendered by the blueprint. |
+| Pull requests | One ticket is one branch and one pull request. The body follows `.github/pull_request_template.md`: the two gates at the top, anchored by `<!-- gate:spec-approved -->` and `<!-- gate:ready-to-merge -->`, then the ticket path, what changes, the acceptance criteria and how to test. The pull request moves the stub into `_done/`. |
+| Gates | Human checkboxes. A session reads them and never ticks them. Jamie ticks on GitHub or from the desk. A missing anchor means not required. |
+| Commits | Conventional Commits. An app's release is the merge of the release-please pull request. A platform names its own release model in `CLAUDE.md`. |
+| Writing | Technical text in Simplified Technical English: stubs, breakdowns, pull request bodies, commit messages, hook text. Questions for Jamie are numbered and carry a default answer. Client-facing text in the client's language. |
+| CI | `ci.yml` calls the reusable workflows in `legible-consulting/.github`. Nothing is copied in. Never run build, lint, typecheck, test, format or dev locally. |
+| Guards | `.claude/settings.json` and the three hooks in `.claude/hooks/` are the blueprint's, byte for byte, so cloud sessions are guarded too. |
+| Secrets | Never in git. Names only, in an `.env.example`. Values in GitHub or Vercel settings. |
