@@ -100,8 +100,9 @@ jobs:
           exit "$fail"
       - name: actionlint on the rendered workflows
         working-directory: ${{ runner.temp }}/zz-${{ matrix.tier }}
+        # The rendered folder is not a git repo, so the files are named instead of found.
         run: |
-          "${GITHUB_WORKSPACE}/actionlint" -color
+          "${GITHUB_WORKSPACE}/actionlint" -color .github/workflows/*.yml
       - name: shellcheck on the rendered hooks
         working-directory: ${{ runner.temp }}/zz-${{ matrix.tier }}
         run: shellcheck --severity=warning .claude/hooks/*.sh
