@@ -2,8 +2,17 @@
 _min_copier_version: "9.0.0"
 _subdirectory: "templates/{{ tier }}"
 _answers_file: .copier-answers.yml
-# A rendered or adopted repo owns its README.md. Copier writes it once and never overwrites it.
-_skip_if_exists: ["README.md"]
+# A rendered or adopted repo owns its README.md and its copy of the ticket contract
+# (.icm/intake/README.md and CONTEXT.md, which the ICM pipeline syncs from icm-board). Copier
+# writes each once and never overwrites it. An app repo also owns its CLAUDE.md and its
+# .gitignore: the routing table and the ignore list grow with the app, and the adopted app
+# repos wrote theirs by hand.
+_skip_if_exists:
+  - README.md
+  - .icm/intake/README.md
+  - .icm/intake/CONTEXT.md
+  - "{% if tier == 'app' %}CLAUDE.md{% endif %}"
+  - "{% if tier == 'app' %}.gitignore{% endif %}"
 
 tier:
   type: str
