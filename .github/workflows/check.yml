@@ -79,6 +79,8 @@ jobs:
           need .icm/intake/_done/.gitkeep
           need .icm/intake/triage/_done/.gitkeep
           need .github/pull_request_template.md
+          need .icm/scripts/new-run.sh
+          need .icm/scripts/close-out.sh
           need .github/workflows/ci.yml
           need .claude/settings.json
           for h in block-local-checks confirm-git-writes guard-plaintext-secrets; do
@@ -103,9 +105,9 @@ jobs:
         # The rendered folder is not a git repo, so the files are named instead of found.
         run: |
           "${GITHUB_WORKSPACE}/actionlint" -color .github/workflows/*.yml
-      - name: shellcheck on the rendered hooks
+      - name: shellcheck on the rendered hooks and scripts
         working-directory: ${{ runner.temp }}/zz-${{ matrix.tier }}
-        run: shellcheck --severity=warning .claude/hooks/*.sh
+        run: shellcheck --severity=warning .claude/hooks/*.sh .icm/scripts/*.sh
 
   same-bytes:
     # The site tier is the source of every shared file. A copy that drifts in app or platform
@@ -118,7 +120,7 @@ jobs:
       - name: app and platform copies equal the site copies
         run: |
           fail=0
-          shared=".icm/intake/CONTEXT.md .icm/intake/README.md .github/pull_request_template.md .claude/settings.json .claude/hooks/block-local-checks.sh .claude/hooks/confirm-git-writes.sh .claude/hooks/guard-plaintext-secrets.sh"
+          shared=".icm/intake/CONTEXT.md .icm/intake/README.md .icm/scripts/new-run.sh .icm/scripts/close-out.sh .github/pull_request_template.md .claude/settings.json .claude/hooks/block-local-checks.sh .claude/hooks/confirm-git-writes.sh .claude/hooks/guard-plaintext-secrets.sh"
           for t in app platform; do
             for f in $shared; do
               cmp -s "templates/site/$f" "templates/$t/$f" \
