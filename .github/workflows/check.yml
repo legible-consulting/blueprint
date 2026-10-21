@@ -98,7 +98,8 @@ jobs:
           exit "$fail"
       - name: actionlint on the rendered workflows
         working-directory: ${{ runner.temp }}/zz-${{ matrix.tier }}
-        run: "${GITHUB_WORKSPACE}/actionlint" -color
+        run: |
+          "${GITHUB_WORKSPACE}/actionlint" -color
       - name: shellcheck on the rendered hooks
         working-directory: ${{ runner.temp }}/zz-${{ matrix.tier }}
         run: shellcheck --severity=warning .claude/hooks/*.sh
