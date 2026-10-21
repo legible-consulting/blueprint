@@ -12,8 +12,9 @@ Each tier folder is a complete template root for copier (`_subdirectory` points 
 ## Written once
 
 `copier update` never overwrites a file that exists and that `_skip_if_exists` in `copier.yml`
-names: every tier's `README.md`, and the `app` and `platform` tiers' `CLAUDE.md` and
-`.gitignore`. Every other rendered file is the blueprint's: `copier update` merges a new tag
+names: every tier's `README.md` and `.icm/intake/README.md` (the repo's own page about its
+backlog), and the `app` and `platform` tiers' `CLAUDE.md` and `.gitignore`. Every other
+rendered file is the blueprint's: `copier update` merges a new tag
 into it three ways and marks a conflict inline. The tickets themselves (`.icm/intake/<epic>/`,
 `triage/`) are never in the template, so an update never touches them.
 
@@ -25,7 +26,7 @@ the loop from stub to merge. There is no `BUILD.md` in any tier.
 
 ## One set of shared files
 
-The `site` tier is the source of every file the tiers share: the ticket contract and its
-README, the pull request template, `.claude/settings.json` and the three hooks. The `app` and
+The `site` tier is the source of every file the tiers share: the ticket contract, the
+pull request template, `.claude/settings.json` and the three hooks. The `app` and
 `platform` copies are byte-identical, and the blueprint's `check.yml` fails when one drifts.
 Change a shared file in `templates/site/`, then copy it to the other tiers.
