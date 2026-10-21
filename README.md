@@ -14,7 +14,7 @@ client-specific is ever committed here.
 
 | Folder | Holds |
 |---|---|
-| `templates/<tier>/` | the files a tier renders; `{{ _copier_conf.answers_file }}.jinja` records the answers |
+| `templates/<tier>/` | the files a tier renders. `{{ _copier_conf.answers_file }}.jinja` records the answers |
 | `conventions/` | what a rendered repo must keep: `CLAUDE.md` shape, tickets, pull requests and gates, commits, writing, CI, guards, secrets |
 | `workshop-kit/` | the one-day workshop (Marp) and course material |
 
