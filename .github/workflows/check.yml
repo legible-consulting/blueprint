@@ -1,0 +1,144 @@
+# check: the blueprint's walk test. Every tier is rendered on each push, the rendered
+# workflows and hooks are linted, and the files the tiers share are compared byte for byte
+# (CI is truth; never run locally).
+name: check
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  secrets:
+    # Public repo, but the scan still runs here: nothing client-specific may enter the method.
+    runs-on: ubuntu-latest
+    env:
+      GITLEAKS_VERSION: 8.30.1
+      GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install gitleaks
+        run: |
+          f="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl -fsSLO "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/${f}"
+          echo "${GITLEAKS_SHA256}  ${f}" | sha256sum -c -
+          tar -xzf "${f}" gitleaks
+      - name: Scan the full history
+        run: ./gitleaks git --redact --no-banner -v .
+
+  render:
+    # Each tier renders into a scratch folder with copier, as a kickoff would. The rendered
+    # tree must carry the ticket convention, the pull request template with both gate anchors,
+    # a CLAUDE.md under 80 lines and no BUILD.md. actionlint reads the rendered workflows and
+    # shellcheck the rendered hooks, so a template error fails here and not in a client repo.
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        tier: [site, app, platform]
+    env:
+      TIER: ${{ matrix.tier }}
+      ACTIONLINT_VERSION: 1.7.12
+      ACTIONLINT_SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install copier and actionlint
+        run: |
+          pipx install copier==9.19.1
+          f="actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          curl -fsSLO "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/${f}"
+          echo "${ACTIONLINT_SHA256}  ${f}" | sha256sum -c -
+          tar -xzf "${f}" actionlint
+      - name: Render the tier
+        run: |
+          copier copy --defaults --vcs-ref HEAD \
+            -d "tier=${TIER}" -d slug=zz-proof -d client_name="Zz Proof" -d language=en \
+            . "${RUNNER_TEMP}/zz-${TIER}"
+      - name: The rendered tree keeps the conventions
+        working-directory: ${{ runner.temp }}/zz-${{ matrix.tier }}
+        run: |
+          fail=0
+          need() { [ -e "$1" ] || { echo "::error::${TIER}: missing $1"; fail=1; }; }
+          need CLAUDE.md
+          need README.md
+          need .copier-answers.yml
+          need .icm/intake/CONTEXT.md
+          need .icm/intake/README.md
+          need .icm/intake/_done/.gitkeep
+          need .icm/intake/triage/_done/.gitkeep
+          need .github/pull_request_template.md
+          need .github/workflows/ci.yml
+          need .claude/settings.json
+          for h in block-local-checks confirm-git-writes guard-plaintext-secrets; do
+            need ".claude/hooks/${h}.sh"
+          done
+          [ ! -e BUILD.md ] || { echo "::error::${TIER}: BUILD.md must not exist"; fail=1; }
+          lines="$(wc -l < CLAUDE.md)"
+          [ "$lines" -lt 80 ] || { echo "::error::${TIER}: CLAUDE.md has ${lines} lines (limit 80)"; fail=1; }
+          for a in gate:spec-approved gate:ready-to-merge; do
+            grep -qF "<!-- ${a} -->" .github/pull_request_template.md \
+              || { echo "::error::${TIER}: pull_request_template.md lacks the ${a} anchor"; fail=1; }
+          done
+          grep -qF "tier: ${TIER}" .github/workflows/ci.yml \
+            || { echo "::error::${TIER}: ci.yml does not pass tier ${TIER}"; fail=1; }
+          ! grep -rqE '\{\{|\}\}' CLAUDE.md README.md .github .icm \
+            || { echo "::error::${TIER}: an unrendered Jinja tag remains"; fail=1; }
+          exit "$fail"
+      - name: actionlint on the rendered workflows
+        working-directory: ${{ runner.temp }}/zz-${{ matrix.tier }}
+        run: "${GITHUB_WORKSPACE}/actionlint" -color
+      - name: shellcheck on the rendered hooks
+        working-directory: ${{ runner.temp }}/zz-${{ matrix.tier }}
+        run: shellcheck --severity=warning .claude/hooks/*.sh
+
+  same-bytes:
+    # The site tier is the source of every shared file. A copy that drifts in app or platform
+    # is the first one to stop guarding (templates/README.md).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: app and platform copies equal the site copies
+        run: |
+          fail=0
+          shared=".icm/intake/CONTEXT.md .icm/intake/README.md .github/pull_request_template.md .claude/settings.json .claude/hooks/block-local-checks.sh .claude/hooks/confirm-git-writes.sh .claude/hooks/guard-plaintext-secrets.sh"
+          for t in app platform; do
+            for f in $shared; do
+              cmp -s "templates/site/$f" "templates/$t/$f" \
+                || { echo "::error file=templates/$t/$f::differs from templates/site/$f"; fail=1; }
+            done
+          done
+          exit "$fail"
+
+  writing:
+    # Simplified Technical English as advice: findings in the run summary, never a failure.
+    # The same linter commit as the house's check.yml.
+    runs-on: ubuntu-latest
+    env:
+      STE_SKILL_SHA: 3944283c183eea13fe5bd902b572da3b4de8bf44
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Fetch the linter at its pinned commit
+        run: |
+          git clone -q https://github.com/danyuchn/asd-ste100-skill /tmp/ste
+          git -C /tmp/ste checkout -q "$STE_SKILL_SHA"
+      - name: Lint every markdown file, as advice
+        run: |
+          out="$(git ls-files -z '*.md' '*.md.jinja' | xargs -0 python3 -I /tmp/ste/scripts/ste-lint.py 2>&1 || true)"
+          { echo '## Simplified Technical English (advice)'; echo; echo '```'; echo "$out" | tail -n 200; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          echo "$out" | tail -n 40
