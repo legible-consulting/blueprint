@@ -1,0 +1,22 @@
+# {{ client_name }} — app
+
+{{ client_name }}'s app, built by Legible Consulting and rendered from
+`legible-consulting/blueprint` (tier `app`). This file is identity and routing only. Copier
+writes it once: `copier update` never overwrites it, so the app's own routing rows go below.
+
+## Routing
+
+| You are asked to | Go to |
+|---|---|
+| build the next ticket | `BUILD.md` |
+| understand the app, its stack and its data | `README.md` |
+| change what CI checks or how a release is cut | `legible-consulting/.github` (`check-client.yml`, `release.yml`); `ci.yml` here only calls them |
+| change a file the blueprint renders | the blueprint, then `copier update` here |
+
+## Rules
+
+- Client-facing text in `{{ language }}`; code, commits and notes in English.
+- CI is truth: never run build, lint, typecheck, test, format or dev locally. Push, then read
+  the `ci` run.
+- Secrets never in git: names only, values in GitHub or Vercel settings.
+- `main` changes by PR; the merge is a human's.
