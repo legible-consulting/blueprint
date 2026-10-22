@@ -6,4 +6,4 @@ notes. Template files under `templates/<tier>/` are Jinja (`.jinja` suffix) or c
 The `site` tier is the source of every shared file. Copy a change to `app` and `platform`
 (`templates/README.md`). Test a change by rendering into a scratch folder with
 `copier copy --vcs-ref HEAD . /tmp/zz-<tier>`, never by editing a client repo by hand.
-`check.yml` renders every tier on push. Technical text in Simplified Technical English.
+`check.yml` renders every tier on each pull request and on push to `main`. Technical text in Simplified Technical English.
