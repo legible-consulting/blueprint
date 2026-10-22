@@ -1,10 +1,11 @@
-# check: the blueprint's walk test. Every tier is rendered on each push, the rendered
-# workflows and hooks are linted, and the files the tiers share are compared byte for byte
-# (CI is truth; never run locally).
+# check: the blueprint's walk test. Every tier is rendered on each pull request and on each
+# push to main, the rendered workflows and hooks are linted, and the files the tiers share
+# are compared byte for byte (CI is truth; never run locally).
 name: check
 
 on:
   push:
+    branches: [main]
   pull_request:
 
 permissions:

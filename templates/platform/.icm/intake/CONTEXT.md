@@ -34,6 +34,17 @@ Rules of the folder:
 - **Status is positional.** A stub in its epic folder is open. A stub in `_done/` is done.
   Dropped work also moves to `_done/`, with a `> Dropped: <reason>, <date>` line at the top.
   Nothing is deleted.
+- **The ticket line names the open path.** The pull request body's `ticket:` line is the
+  stub's path when the ticket started: `.icm/intake/<epic-slug>/<feature-slug>.md` or
+  `.icm/intake/triage/<slug>.md`. The line does not change when the file moves (why: the
+  line is the ticket's identity, and a move changes the status, not the identity ·
+  2026-10-22). A reader that resolves the line to a file looks in this order:
+  1. The path as written. The stub is there on `main` while the pull request is open.
+  2. The same path with `_done/` before the file name. The stub is there on the branch from
+     its first commit, and on `main` after the merge.
+  3. `.icm/intake/_done/<epic-slug>/_done/<feature-slug>.md`. The stub is there after
+     close-out moves the epic.
+  A `> Dropped:` first line marks a dropped stub in any `_done/`.
 - **`main` is the only home.** The desk and every reader read this folder on `main`. A stub
   that is not pushed does not exist.
 - **The pull request that ships a stub is the pull request that retires it.** The move to
