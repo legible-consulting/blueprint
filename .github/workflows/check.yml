@@ -84,7 +84,7 @@ jobs:
           need .icm/scripts/close-out.sh
           need .github/workflows/ci.yml
           need .claude/settings.json
-          for h in block-local-checks confirm-git-writes guard-plaintext-secrets; do
+          for h in block-local-checks confirm-git-writes guard-plaintext-secrets session-ledger; do
             need ".claude/hooks/${h}.sh"
           done
           [ ! -e BUILD.md ] || { echo "::error::${TIER}: BUILD.md must not exist"; fail=1; }
@@ -121,7 +121,7 @@ jobs:
       - name: app and platform copies equal the site copies
         run: |
           fail=0
-          shared=".icm/intake/CONTEXT.md .icm/intake/README.md .icm/scripts/new-run.sh .icm/scripts/close-out.sh .github/pull_request_template.md .claude/settings.json .claude/hooks/block-local-checks.sh .claude/hooks/confirm-git-writes.sh .claude/hooks/guard-plaintext-secrets.sh"
+          shared=".icm/intake/CONTEXT.md .icm/intake/README.md .icm/scripts/new-run.sh .icm/scripts/close-out.sh .github/pull_request_template.md .claude/settings.json .claude/hooks/block-local-checks.sh .claude/hooks/confirm-git-writes.sh .claude/hooks/guard-plaintext-secrets.sh .claude/hooks/session-ledger.sh"
           for t in app platform; do
             for f in $shared; do
               cmp -s "templates/site/$f" "templates/$t/$f" \
