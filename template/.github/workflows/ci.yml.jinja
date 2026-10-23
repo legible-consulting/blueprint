@@ -1,0 +1,30 @@
+# ci: the client checks{% if release %} and the release{% endif %}, defined once in legible-consulting/.github (CI is
+# truth; never run locally).
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-{% raw %}${{ github.ref }}{% endraw %}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    uses: legible-consulting/.github/.github/workflows/check-client.yml@main
+{%- if release %}
+
+  release:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+      pull-requests: write
+    uses: legible-consulting/.github/.github/workflows/release.yml@main
+    secrets:
+      token: {% raw %}${{ secrets.GITHUB_TOKEN }}{% endraw %}
+{%- endif %}
