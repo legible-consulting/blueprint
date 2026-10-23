@@ -37,17 +37,24 @@ jobs:
         run: ./gitleaks git --redact --no-banner -v .
 
   render:
-    # Each tier renders into a scratch folder with copier, as a kickoff would. The rendered
-    # tree must carry the ticket convention, the pull request template with both gate anchors,
-    # a CLAUDE.md under 80 lines and no BUILD.md. actionlint reads the rendered workflows and
-    # shellcheck the rendered hooks, so a template error fails here and not in a client repo.
+    # Each tier renders into a scratch folder with copier, as a kickoff would, and the app tier
+    # renders twice: with uat and without. The rendered tree must carry the ticket convention,
+    # the pull request template with both gate anchors, a CLAUDE.md under 80 lines and no
+    # BUILD.md. A uat render carries every UAT file; every other render carries none. actionlint
+    # reads the rendered workflows and shellcheck the rendered hooks and scripts, so a template
+    # error fails here and not in a client repo.
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        tier: [site, app, platform]
+        include:
+          - { tier: site, uat: "false", name: site }
+          - { tier: app, uat: "false", name: app }
+          - { tier: app, uat: "true", name: app-uat }
+          - { tier: platform, uat: "false", name: platform }
     env:
       TIER: ${{ matrix.tier }}
+      UAT: ${{ matrix.uat }}
       ACTIONLINT_VERSION: 1.7.12
       ACTIONLINT_SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
     steps:
@@ -65,10 +72,12 @@ jobs:
       - name: Render the tier
         run: |
           copier copy --defaults --vcs-ref HEAD \
-            -d "tier=${TIER}" -d slug=zz-proof -d client_name="Zz Proof" -d language=en \
-            . "${RUNNER_TEMP}/zz-${TIER}"
+            -d "tier=${TIER}" -d slug=zz-proof -d client_name="Zz Proof" -d language=en -d "uat=${UAT}" \
+            . "${RUNNER_TEMP}/zz-${NAME}"
+        env:
+          NAME: ${{ matrix.name }}
       - name: The rendered tree keeps the conventions
-        working-directory: ${{ runner.temp }}/zz-${{ matrix.tier }}
+        working-directory: ${{ runner.temp }}/zz-${{ matrix.name }}
         run: |
           fail=0
           need() { [ -e "$1" ] || { echo "::error::${TIER}: missing $1"; fail=1; }; }
@@ -88,6 +97,20 @@ jobs:
             need ".claude/hooks/${h}.sh"
           done
           [ ! -e BUILD.md ] || { echo "::error::${TIER}: BUILD.md must not exist"; fail=1; }
+          uat_files=".icm/uat/CONTEXT.md .icm/scripts/promote.sh .icm/scripts/uat-db.sh .icm/scripts/rollback.sh .icm/scripts/lib/vercel.sh .icm/scripts/lib/neon.sh .github/workflows/promote.yml .github/workflows/neon-cleanup.yml .env.example"
+          for f in $uat_files; do
+            if [ "$UAT" = true ]; then
+              [ -e "$f" ] || { echo "::error::${TIER} with uat: missing $f"; fail=1; }
+            else
+              [ ! -e "$f" ] || { echo "::error::${TIER} without uat: $f must not exist"; fail=1; }
+            fi
+          done
+          if [ "$UAT" = true ]; then
+            grep -qF '.icm/uat/CONTEXT.md' CLAUDE.md || { echo "::error::${TIER} with uat: CLAUDE.md does not route to .icm/uat/CONTEXT.md"; fail=1; }
+            grep -qF '## Environments' README.md || { echo "::error::${TIER} with uat: README.md has no Environments table"; fail=1; }
+          else
+            ! grep -qF '.icm/uat/CONTEXT.md' CLAUDE.md || { echo "::error::${TIER} without uat: CLAUDE.md routes to .icm/uat/CONTEXT.md"; fail=1; }
+          fi
           lines="$(wc -l < CLAUDE.md)"
           [ "$lines" -lt 80 ] || { echo "::error::${TIER}: CLAUDE.md has ${lines} lines (limit 80)"; fail=1; }
           for a in gate:spec-approved gate:ready-to-merge; do
@@ -102,13 +125,14 @@ jobs:
             || { echo "::error::${TIER}: an unrendered Jinja tag remains"; fail=1; }
           exit "$fail"
       - name: actionlint on the rendered workflows
-        working-directory: ${{ runner.temp }}/zz-${{ matrix.tier }}
+        working-directory: ${{ runner.temp }}/zz-${{ matrix.name }}
         # The rendered folder is not a git repo, so the files are named instead of found.
         run: |
           "${GITHUB_WORKSPACE}/actionlint" -color .github/workflows/*.yml
       - name: shellcheck on the rendered hooks and scripts
-        working-directory: ${{ runner.temp }}/zz-${{ matrix.tier }}
-        run: shellcheck --severity=warning .claude/hooks/*.sh .icm/scripts/*.sh
+        working-directory: ${{ runner.temp }}/zz-${{ matrix.name }}
+        run: |
+          find .claude/hooks .icm/scripts -name '*.sh' -print0 | xargs -0 shellcheck --severity=warning
 
   same-bytes:
     # The site tier is the source of every shared file. A copy that drifts in app or platform

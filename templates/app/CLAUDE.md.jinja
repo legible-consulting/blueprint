@@ -14,6 +14,9 @@ writes it once: `copier update` never overwrites it, so the app's own routing ro
 | understand the app, its stack and its data | `README.md` |
 | change what CI checks or how a release is cut | `legible-consulting/.github` (`check-client.yml`, `release.yml`). `ci.yml` here only calls them |
 | change a file the blueprint renders | the blueprint, then `copier update` here |
+{%- if uat %}
+| read the UAT batch, record the client's sign-off, promote, reset the UAT database, roll back | `.icm/uat/CONTEXT.md` (the whole UAT contract), then its scripts |
+{%- endif %}
 
 ## Rules
 
@@ -28,3 +31,8 @@ writes it once: `copier update` never overwrites it, so the app's own routing ro
 - One ticket is one branch and one pull request. The pull request moves the stub to `_done/`.
 - `main` changes by pull request. Gates are human checkboxes: read them, never tick them. The
   merge is Jamie's. The release is Jamie's merge of the release-please pull request.
+{%- if uat %}
+- A ticket's merge reaches the UAT environment, where the client tests the batch. The merge of
+  the release pull request is also the promotion to production, after the client's sign-off is
+  recorded. A session never merges it (`.icm/uat/CONTEXT.md`).
+{%- endif %}

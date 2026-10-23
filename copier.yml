@@ -8,11 +8,14 @@ _answers_file: .copier-answers.yml
 # repos wrote theirs by hand. Copier writes each once and never overwrites it. Every other
 # rendered file is the blueprint's: the ticket contract (.icm/intake/CONTEXT.md), the pull
 # request template, the guards, ci.yml.
+# A UAT build's .env.example is the app's own list of names: it grows with the code, so it is
+# written once too.
 _skip_if_exists:
   - README.md
   - .icm/intake/README.md
   - "{% if tier in ['app', 'platform'] %}CLAUDE.md{% endif %}"
   - "{% if tier in ['app', 'platform'] %}.gitignore{% endif %}"
+  - "{% if uat %}.env.example{% endif %}"
 
 tier:
   type: str
@@ -37,3 +40,15 @@ language:
   type: str
   help: Language of client-facing text (BCP 47, e.g. pt-PT, en, nl, fr, de)
   default: pt-PT
+
+uat:
+  type: bool
+  help: >-
+    Does the client sign each batch off on a UAT environment before it reaches production?
+    Yes renders .icm/uat/CONTEXT.md, the scripts promote.sh, uat-db.sh and rollback.sh, the
+    workflows promote.yml and neon-cleanup.yml, and .env.example: a Vercel custom environment
+    `uat` deployed from main on every merge, a Neon branch `uat` for its database, and a
+    promotion that is Jamie's merge of the release pull request. No means the pull request
+    preview is the UAT and production follows main. App tier only.
+  default: false
+  when: "{{ tier == 'app' }}"

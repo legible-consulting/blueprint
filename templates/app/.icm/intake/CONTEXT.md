@@ -257,6 +257,7 @@ no model turn, and the judgement stays with Jamie · 2026-10-21).
    Jamie.
 7. **Jamie tests the preview**, ticks **Ready to merge**, and merges. A session never merges
    and never ticks a gate (why: the gate is where Jamie's judgement enters ·
-   2026-10-21).
+   2026-10-21). Where `.icm/uat/CONTEXT.md` exists, the merge reaches the UAT environment,
+   and production moves on the promotion that contract describes.
 
 Gates are human checkboxes. Read them. Never tick them.
