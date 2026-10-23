@@ -7,7 +7,7 @@ names.
 | Convention | Rule |
 |---|---|
 | `CLAUDE.md` | Identity and routing only. Under 80 lines. Every rule carries its why where the why is not obvious. |
-| Tickets | `.icm/intake/`: an epic is a folder with `breakdown.md` and one stub per unit of work. A one-off is a triage stub. The path is the identity. The folder is the status. The contract is `.icm/intake/CONTEXT.md`, rendered by the blueprint. |
+| Tickets | `.icm/intake/`: an epic is a folder with `breakdown.md` and one stub per unit of work. A one-off is a triage stub. The path is the identity. The folder is the status. The contract is `.icm/intake/CONTEXT.md`, rendered by the blueprint. A user story becomes one epic. The story stays in the client's Drive. The breakdown's `Criteria → stubs` table shows where each criterion went. |
 | Pull requests | One ticket is one branch and one pull request. The body follows `.github/pull_request_template.md`: the two gates at the top, anchored by `<!-- gate:spec-approved -->` and `<!-- gate:ready-to-merge -->`, then the ticket path, what changes, the acceptance criteria and how to test. The pull request moves the stub into `_done/`. |
 | Scripts | `.icm/scripts/new-run.sh` starts a ticket and `.icm/scripts/close-out.sh` finishes an epic. Both are the blueprint's. They do the mechanics of one step each and decide nothing. |
 | Gates | Human checkboxes. A session reads them and never ticks them. Jamie ticks on GitHub or from the desk. A missing anchor means not required. |
