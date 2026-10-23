@@ -92,7 +92,8 @@ vercel_deployments() { # <target>
 }
 
 vercel_deployment() { # <target> <sha>
-  local q="projectId=$(vercel_project_id)&target=$1&limit=20"
+  local q
+  q="projectId=$(vercel_project_id)&target=$1&limit=20"
   # Vercel's sha filter matches the full 40-character SHA only. A shorter one is matched here.
   [ "${#2}" -ne 40 ] || q="${q}&sha=$2"
   vercel_get "/v6/deployments?${q}" \
