@@ -57,19 +57,19 @@ breakdown, the triage stub, the writing rules and the loop from stub to merge. T
 | File | Does |
 |---|---|
 | `.icm/uat/CONTEXT.md` | the whole UAT contract: the three environments, the database, the batch, the sign-off, the promotion, the rollback, the setup acts and the names |
-| `.icm/scripts/promote.sh` | `status` reads the batch, the release pull request, `ci`, the UAT deployment and the staged production build. `approve --by "<who>"` records the client's word on the release pull request |
-| `.icm/scripts/uat-db.sh` | `status`, `create`, `reset --yes`, `delete --yes`: the Neon branch `uat` (schema only, no rows) and its connection string on the Vercel custom environment |
+| `.icm/scripts/promote.sh` | `status` reads the batch, the release pull request, `ci`, the UAT deployment, the staged production build, and prints the dispatch command when a release waits. `approve --by "<who>"` records the client's word on the release pull request |
+| `.icm/scripts/uat-db.sh` | with one Neon project: `status`, `create`, `reset --yes`, `delete --yes`: the Neon branch `uat` (schema only, no rows) and its connection string on the Vercel custom environment. A build with a second Neon project for UAT does not use it |
 | `.icm/scripts/rollback.sh` | names the previous production deployment and prints the rollback command. Runs nothing |
 | `.icm/scripts/lib/vercel.sh`, `lib/neon.sh` | the two transports. A token never reaches a command line |
-| `.github/workflows/promote.yml` | after `ci` on `main`: a `v*` tag at the head → migrate production → promote the staged build → read production once |
+| `.github/workflows/promote.yml` | on Jamie's dispatch with a release tag: migrate production → promote the staged build → read production once. No push, merge or tag starts it |
 | `.github/workflows/neon-cleanup.yml` | a pull request closes → its `preview/<branch>` Neon branch is deleted |
 | `.env.example` | the names, with the environments each one reaches. Written once |
 
 The shape in four sentences. Every merge to `main` deploys the Vercel custom environment `uat`
 and builds a staged production deployment. The client tests the batch at the UAT address. Jamie
-records the sign-off and merges the release pull request. That merge migrates production and
-promotes the staged build. No means the pull request preview is the UAT and production follows
-`main`.
+records the sign-off, merges the release pull request, and dispatches `promote.yml` with its tag.
+That run migrates production and promotes the staged build. No means the pull request preview is
+the UAT and production follows `main`.
 
 ### How a file renders only on yes
 

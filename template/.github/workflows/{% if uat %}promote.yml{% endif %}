@@ -1,16 +1,19 @@
 # promote: the promotion to production (CI is truth; never run locally). The contract is
-# .icm/uat/CONTEXT.md. It runs when `ci` completes on main. A `v*` tag at that commit means the
-# release pull request merged: production is migrated, then the staged production build of that
-# commit is promoted, then production is read once. No tag means a ticket merged: UAT has it,
-# production waits, and this run ends green. Each job needs the one before it, so a failure
-# leaves production untouched.
+# .icm/uat/CONTEXT.md. Nothing starts this workflow but Jamie: it runs on workflow_dispatch with
+# the release tag, after the client's sign-off is recorded and the release pull request is
+# merged. The tag must be a `v*` tag in the repository that points at a commit on main.
+# Production is migrated, then the staged production build of that commit is promoted, then
+# production is read once. Each job needs the one before it, so a failure leaves production
+# untouched. No push, merge, tag or schedule promotes.
 name: promote
 
 on:
-  workflow_run:
-    workflows: [ci]
-    types: [completed]
-    branches: [main]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: The release tag to promote (v*), made by the merge of the release pull request
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -25,34 +28,37 @@ defaults:
 
 jobs:
   release:
-    if: github.event.workflow_run.event == 'push' && github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    env:
+      TAG: ${{ inputs.tag }}
     outputs:
       tag: ${{ steps.tag.outputs.tag }}
-      sha: ${{ github.event.workflow_run.head_sha }}
+      sha: ${{ steps.tag.outputs.sha }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 0
           persist-credentials: false
-      - name: A release tag at this commit?
+      - name: The tag is a release on main
         id: tag
         run: |
-          tag="$(git tag --points-at HEAD 'v*' | sort -V | tail -n1)"
-          if [ -z "$tag" ]; then
-            echo "::notice::no release tag at $(git rev-parse --short HEAD): a ticket merged, UAT has it, production waits"
-          else
-            echo "release $tag at $(git rev-parse --short HEAD): migrate production, then promote"
-          fi
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          case "$TAG" in
+            v*) ;;
+            *) echo "::error::'$TAG' is not a release tag (v*): nothing is promoted"; exit 1 ;;
+          esac
+          sha="$(git rev-parse --verify --quiet "refs/tags/${TAG}^{commit}" || true)"
+          [ -n "$sha" ] || { echo "::error::tag $TAG is not in the repository: nothing is promoted"; exit 1; }
+          git merge-base --is-ancestor "$sha" origin/main \
+            || { echo "::error::tag $TAG (${sha:0:7}) is not on main: nothing is promoted"; exit 1; }
+          echo "release $TAG at ${sha:0:7}: migrate production, then promote"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
 
   migrate:
     # db:migrate, then db:verify, against production. A repository without the scripts skips
     # them (--if-present). A missing DATABASE_URL fails here, before anything is promoted.
     needs: release
-    if: needs.release.outputs.tag != ''
     runs-on: ubuntu-latest
     timeout-minutes: 20
     concurrency:
@@ -88,7 +94,6 @@ jobs:
 
   promote:
     needs: [release, migrate]
-    if: needs.release.outputs.tag != ''
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
