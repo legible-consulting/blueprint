@@ -1,4 +1,4 @@
-# check: the blueprint's walk test. Three proof answer sets render on each pull request and on
+# check: the blueprint's walk test. Four proof answer sets render on each pull request and on
 # each push to main, the rendered workflows, hooks and scripts are linted, and every
 # functionality question is checked for a default and a help line (CI is truth; never run
 # locally).
@@ -39,7 +39,8 @@ jobs:
 
   render:
     # The template renders into a scratch folder with copier, as a kickoff would, once per
-    # proof answer set: every default, every yes (monorepo, release, uat), and release no. The
+    # proof answer set: every default, every yes, every no, and uat alone (uat and release are
+    # separate processes). The
     # rendered tree must carry the ticket convention, the pull request template with both gate
     # anchors, a CLAUDE.md under 80 lines and no BUILD.md. A uat render carries every UAT file
     # and the others none. actionlint reads the rendered workflows and shellcheck the rendered
@@ -52,6 +53,7 @@ jobs:
           - { name: defaults, monorepo: "false", release: "true", uat: "false" }
           - { name: all, monorepo: "true", release: "true", uat: "true" }
           - { name: minimal, monorepo: "false", release: "false", uat: "false" }
+          - { name: uat-alone, monorepo: "false", release: "false", uat: "true" }
     env:
       NAME: ${{ matrix.name }}
       MONOREPO: ${{ matrix.monorepo }}

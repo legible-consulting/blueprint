@@ -2,22 +2,24 @@
 # promote.sh — the batch, the client's word, and what waits on Jamie.
 #
 # Usage: .icm/scripts/promote.sh [status]
-#        .icm/scripts/promote.sh approve --by "<who>" [--note "<their words>"]
+#        .icm/scripts/promote.sh approve --by "<who>" [--note "<their words>"] [--sha <commit on main>]
 #
-#   status   the last release tag, the batch since it (git log <tag>..origin/main), the open
-#            release pull request, `ci` on main's head, the UAT deployment of that head, the
+#   status   the last promotion (its tag and commit), the batch since it (git log <tag>..origin/main),
+#            any draft promotion Release, `ci` on main's head, the UAT deployment of that head, the
 #            staged production build of it, and the setup acts this script can read. Reads only.
-#   approve  THE RECORD OF THE CLIENT'S WORD. Jamie, in this session, says the client approved
-#            and names who. The script posts the record on the open release pull request, names
-#            the batch and the UAT deployment, and stops. It refuses without --by, without an
-#            open release pull request, and when the UAT deployment of main's head is not READY.
-#            It ticks nothing and merges nothing: the merge of the release pull request is the
-#            promotion, and it is Jamie's.
+#   approve  THE RECORD OF THE CLIENT'S WORD. Jamie, in this session, says the client approved and
+#            names who. The script drafts a GitHub Release tagged promote/<date>-<sha7> at the
+#            signed-off commit (origin/main's head, or --sha). Its notes carry who, when, the note,
+#            the UAT deployment, the batch, and the line `- promote-sha: <commit>` that promote.yml
+#            requires. It refuses without --by, a commit that is not on origin/main, a commit
+#            already promoted, an open draft promotion, a tag that exists, and a UAT deployment of
+#            the commit that is not READY. It never publishes: Jamie publishes the Release on
+#            GitHub, and that publish is the promotion.
 #
 # Reads: gh (signed in), git, jq, curl, VERCEL_TOKEN, and VERCEL_TEAM, VERCEL_PROJECT,
 # UAT_ENVIRONMENT when set. Without VERCEL_TOKEN, status prints what git and GitHub know and
 # approve refuses. The contract is .icm/uat/CONTEXT.md.
-# Exit: 0 reported or recorded · 1 an error · 3 a refusal, named on stderr, RESULT: STOP.
+# Exit: 0 reported or drafted · 1 an error · 3 a refusal, named on stderr, RESULT: STOP.
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -27,43 +29,51 @@ die() { echo "error: $*" >&2; exit 1; }
 stop() { echo "$*" >&2; echo "RESULT: STOP"; exit 3; }
 for t in gh git jq curl; do command -v "$t" >/dev/null 2>&1 || die "$t is not installed"; done
 
-verb=status; by=""; note=""
+verb=status; by=""; note=""; sha_in=""
 while [ $# -gt 0 ]; do
   case "$1" in
     status|approve) verb="$1"; shift ;;
     --by) by="${2:-}"; shift 2 ;;
     --note) note="${2:-}"; shift 2 ;;
-    -h|--help) sed -n '2,20p' "${BASH_SOURCE[0]}"; exit 0 ;;
-    *) die "unknown argument: $1 (usage: promote.sh [status] | approve --by \"<who>\" [--note \"<text>\"])" ;;
+    --sha) sha_in="${2:-}"; shift 2 ;;
+    -h|--help) sed -n '2,22p' "${BASH_SOURCE[0]}"; exit 0 ;;
+    *) die "unknown argument: $1 (usage: promote.sh [status] | approve --by \"<who>\" [--note \"<text>\"] [--sha <commit>])" ;;
   esac
 done
 
 # shellcheck source=lib/vercel.sh
 source "$here/lib/vercel.sh"
 
-# --- git: the last release and the batch ---------------------------------------------------------
+# --- git: the commit, the last promotion and the batch -------------------------------------------
 git fetch -q --tags origin main
-head="$(git rev-parse origin/main)"
-short="${head:0:7}"
-last_tag="$(git describe --tags --match 'v*' --abbrev=0 origin/main 2>/dev/null || true)"
-if [ -n "$last_tag" ]; then
-  range="${last_tag}..origin/main"
+if [ -n "$sha_in" ]; then
+  sha="$(git rev-parse --verify --quiet "${sha_in}^{commit}" || true)"
+  [ -n "$sha" ] || die "no commit $sha_in in this clone (fetch it first)"
+  git merge-base --is-ancestor "$sha" origin/main || stop "$sha_in is not on origin/main: only a commit of main is promoted"
 else
-  range="origin/main"
+  sha="$(git rev-parse origin/main)"
+fi
+short="${sha:0:7}"
+last_tag="$(git tag --list 'promote/*' --sort=-creatordate | head -n1)"
+last_sha=""
+if [ -n "$last_tag" ]; then
+  last_sha="$(git rev-list -n1 "$last_tag")"
+  range="${last_sha}..${sha}"
+else
+  range="$sha"
 fi
 batch="$(git log --oneline --no-decorate "$range")"
 n="$(printf '%s\n' "$batch" | grep -c . || true)"
 
-# --- GitHub: the release pull request and ci on main's head ----------------------------------------
-release_pr="$(gh pr list --state open --label 'autorelease: pending' --json number,url --jq 'first // empty' 2>/dev/null || true)"
-pr_number="$(printf '%s' "$release_pr" | jq -r '.number // empty' 2>/dev/null || true)"
-pr_url="$(printf '%s' "$release_pr" | jq -r '.url // empty' 2>/dev/null || true)"
-ci="$(gh run list --workflow ci --branch main --commit "$head" --limit 1 --json status,conclusion \
+# --- GitHub: a draft promotion, and ci on the commit ---------------------------------------------
+draft_tag="$(gh release list --limit 50 --json tagName,isDraft --jq '[.[] | select(.isDraft and (.tagName | startswith("promote/")))] | first | .tagName // empty' 2>/dev/null || true)"
+ci="$(gh run list --workflow ci --branch main --commit "$sha" --limit 1 --json status,conclusion \
   --jq 'first | "\(.status)\(if .conclusion then " " + .conclusion else "" end)"' 2>/dev/null || true)"
 [ -n "$ci" ] || ci="no run found for $short"
 
 # --- Vercel: the environment, UAT, the staged build, the setup acts -------------------------------
-uat_state="not read"; prod_state="not read"; prod_line="VERCEL_TOKEN is not set: UAT and production were not read"
+uat_state="not read"; prod_state="not read"
+prod_line="VERCEL_TOKEN is not set: UAT and production were not read"
 uat_line="$prod_line"; setup_lines=""; uat_id=""; uat_domain=""
 if [ -n "${VERCEL_TOKEN:-}" ]; then
   vercel_require "reading UAT and production"
@@ -74,13 +84,13 @@ if [ -n "${VERCEL_TOKEN:-}" ]; then
     matcher="$(printf '%s' "$env" | jq -r '"\(.branchMatcher.type // "?") \(.branchMatcher.pattern // "?")"')"
     setup_lines="  [OK]   custom environment '$slug' on $(vercel_project_name), tracking: $matcher"$'\n'
     if [ -n "$uat_domain" ]; then setup_lines+="  [OK]   domain attached: $uat_domain"$'\n'; else setup_lines+="  [TODO] no domain attached to '$slug' (Setup step 1)"$'\n'; fi
-    dep="$(vercel_deployment "$slug" "$head")"
+    dep="$(vercel_deployment "$slug" "$sha")"
     if [ -n "$dep" ]; then
       uat_state="$(printf '%s' "$dep" | jq -r '.state // .readyState')"
       uat_id="$(printf '%s' "$dep" | jq -r '.uid // .id')"
       uat_line="$uat_state on $short · $uat_id${uat_domain:+ · https://$uat_domain}"
     else
-      uat_line="no '$slug' deployment of $short yet"
+      uat_line="no '$slug' deployment of $short"
     fi
   else
     setup_lines="  [TODO] no custom environment '$slug' on $(vercel_project_name) (Setup step 1)"$'\n'
@@ -94,52 +104,61 @@ if [ -n "${VERCEL_TOKEN:-}" ]; then
     *) setup_lines+="  [?]    Auto-assign Custom Production Domains: not in the project read; check Settings → Environments → Production"$'\n' ;;
   esac
   current="$(printf '%s' "$project" | jq -r '.targets.production.id // empty')"
-  pdep="$(vercel_deployment production "$head")"
+  pdep="$(vercel_deployment production "$sha")"
   if [ -n "$pdep" ]; then
     prod_state="$(printf '%s' "$pdep" | jq -r '.state // .readyState')"
     pid="$(printf '%s' "$pdep" | jq -r '.uid // .id')"
     if [ "$pid" = "$current" ]; then prod_line="current: $short is promoted ($pid)"; prod_state="current"
     else prod_line="staged $prod_state on $short ($pid); production serves ${current:-nothing}"; fi
   else
-    prod_line="no production build of $short yet; production serves ${current:-nothing}"
+    prod_line="no production build of $short; production serves ${current:-nothing}"
   fi
 fi
 
 # --- status ----------------------------------------------------------------------------------------
-echo "release:    ${last_tag:-none yet}$( [ -n "$last_tag" ] && echo " at $(git rev-parse --short "$last_tag")")"
-echo "batch:      $n commit(s) on main since ${last_tag:-the first commit}"
+echo "promotion:  ${last_tag:-none yet}${last_sha:+ at ${last_sha:0:7}}"
+echo "commit:     $short$( [ -n "$sha_in" ] || echo " (origin/main)")"
+echo "batch:      $n commit(s) since ${last_tag:-the first commit}"
 [ -z "$batch" ] || printf '%s\n' "$batch" | head -n 20 | sed 's/^/  /'
 [ "$n" -le 20 ] || echo "  … $((n - 20)) more"
-if [ -n "$pr_number" ]; then echo "release PR: #$pr_number $pr_url"; else echo "release PR: none open (nothing merged since the last release, or release-please has not run on main yet)"; fi
-echo "ci on main: $ci ($short)"
+if [ -n "$draft_tag" ]; then echo "draft:      $draft_tag waits for Jamie's publish"; else echo "draft:      none"; fi
+echo "ci:         $ci ($short)"
 echo "uat:        $uat_line"
 echo "production: $prod_line"
 if [ -n "$setup_lines" ]; then echo "setup:"; printf '%s' "$setup_lines"; fi
 
 if [ "$verb" = status ]; then
-  echo "RESULT: BATCH $n since ${last_tag:-start} · release PR ${pr_number:+#}${pr_number:-none} · ci ${ci%% *} · uat $uat_state · production $prod_state"
+  echo "RESULT: BATCH $n since ${last_tag:-start} · draft ${draft_tag:-none} · ci ${ci%% *} · uat $uat_state · production $prod_state"
   exit 0
 fi
 
-# --- approve: the record --------------------------------------------------------------------------
+# --- approve: the draft Release ---------------------------------------------------------------------
 [ -n "$by" ] || die "approve needs --by \"<who said yes>\""
 [ -n "${VERCEL_TOKEN:-}" ] || stop "VERCEL_TOKEN is not set: the UAT deployment cannot be read, so the record cannot name what the client tested"
-[ -n "$pr_number" ] || stop "no release pull request is open: nothing to promote. A merge to main makes release-please open one"
+[ -z "$draft_tag" ] || stop "a draft promotion exists: $draft_tag. Publish it or delete it on GitHub first"
+[ "$sha" != "$last_sha" ] || stop "$short is the last promotion already: nothing to promote"
+[ "$n" -gt 0 ] || stop "no commit between the last promotion and $short: nothing to promote"
 [ "$uat_state" = READY ] || stop "the UAT deployment of $short is ${uat_state}: the client cannot have tested this batch"
 [ "$prod_state" = READY ] || [ "$prod_state" = current ] || echo "note: the production build of $short is ${prod_state}. promote.yml waits for it, fifteen minutes at most."
+tag="promote/$(date -u +%Y-%m-%d)-${short}"
+! git rev-parse --verify --quiet "refs/tags/${tag}" >/dev/null || stop "tag $tag exists"
 
 tmp="$(mktemp)"
 trap 'rm -f "$tmp"' EXIT
 {
   echo "**UAT sign-off** — ${by} approved the batch on $(date -u +%Y-%m-%d)${note:+: ${note}}"
   echo
-  echo "- batch: \`${last_tag:-start}..${short}\`, ${n} commit(s)"
+  echo "- promote-sha: ${sha}"
   echo "- uat: ${uat_domain:+https://$uat_domain · }deployment ${uat_id} of ${short}"
-  echo "- recorded by \`.icm/scripts/promote.sh approve\`"
+  echo "- batch: \`${last_tag:-start}..${short}\`, ${n} commit(s)"
   echo
-  echo "The merge of this pull request is the promotion. It is Jamie's. Merge nothing else before it."
+  echo "## Changes"
+  echo
+  printf '%s\n' "$batch" | sed 's/^/- /'
+  echo
+  echo "Recorded by \`.icm/scripts/promote.sh approve\`. The publish of this Release is the promotion. It is Jamie's. \`promote.yml\` then migrates production and promotes the staged build of ${short}."
 } > "$tmp"
-gh pr comment "$pr_number" --body-file "$tmp" >/dev/null
-echo "recorded on $pr_url"
-echo "next: Jamie merges the release pull request. promote.yml then migrates production and promotes the staged build of the release commit."
-echo "RESULT: RECORDED $pr_url"
+url="$(gh release create "$tag" --draft --target "$sha" --title "Promotion $(date -u +%Y-%m-%d): ${n} change(s), approved by ${by}" --notes-file "$tmp")"
+echo "drafted $url"
+echo "next: Jamie publishes the Release on GitHub. The publish is the promotion: promote.yml migrates production and promotes the staged build of ${short}."
+echo "RESULT: DRAFTED $tag"

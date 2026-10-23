@@ -11,14 +11,14 @@ ticket from stub to production.
 ```
 .icm/uat/CONTEXT.md              this contract
 .icm/scripts/
-  promote.sh                     status: the batch, the release pull request, UAT, the staged production build
-                                 approve --by "<who>": records the client's word on the release pull request
+  promote.sh                     status: the batch, any draft promotion, UAT, the staged production build
+                                 approve --by "<who>": drafts the promotion Release at the signed-off commit
   uat-db.sh                      status | create | reset --yes | delete --yes: the Neon branch `uat`
                                  and its connection string on the UAT environment
   rollback.sh                    names the previous production deployment, prints the command, runs nothing
   lib/vercel.sh, lib/neon.sh     the two transports the scripts and the workflows share
 .github/workflows/
-  promote.yml                    after `ci` on main: a release tag at the head → migrate production → promote
+  promote.yml                    Jamie publishes the promotion Release → migrate production → promote
   neon-cleanup.yml               a pull request closes → its Neon branch `preview/<branch>` is deleted
 .env.example                     the variables by name, with the environments each one reaches
 ```
@@ -29,7 +29,7 @@ ticket from stub to production.
 |---|---|---|---|
 | Preview | one pull request, at its Vercel preview URL | the Neon branch `preview/<git branch>` | every push to the branch |
 | UAT | `main`, at the UAT address: the Vercel custom environment `uat` | the Neon branch `uat` | every merge to `main` |
-| Production | the last promoted release, at the production domain | the Neon project's default branch | the merge of the release pull request |
+| Production | the last promotion, at the production domain | the Neon project's default branch | the publish of a promotion Release |
 
 - **`main` is the only long-lived branch.** Every ticket merges into it (why: one branch leaves
   nothing to sync or to bring back · 2026-10-23).
@@ -92,65 +92,73 @@ Rules:
 
 ## The batch and the sign-off
 
-- **The batch is what merged since the last release**: `git log <last v* tag>..origin/main`. No
-  file records it. release-please keeps the same list in the open release pull request.
-  `promote.sh status` prints the batch, the release pull request, `ci` on `main`'s head, the UAT
-  deployment of that head and the staged production build of it (why: one batch, read from git,
-  never from a second home · 2026-10-23).
+- **The batch is what merged since the last promotion**: `git log <last promote/* tag>..origin/main`.
+  No file records it. The tag is made when Jamie publishes the promotion Release, so a draft
+  never counts. `promote.sh status` prints the batch, any draft promotion, `ci` on `main`'s
+  head, the UAT deployment of that head and the staged production build of it (why: one batch,
+  read from git, never from a second home · 2026-10-23).
 - **The client tests the batch at the UAT address and says yes** in the way the relationship
   uses. Jamie records it: `.icm/scripts/promote.sh approve --by "<who>" [--note "<their
-  words>"]`. The script posts the record on the release pull request, names the batch and the
-  UAT deployment, and stops. It ticks nothing and merges nothing (why: the word is recorded where
-  the merge happens, so a reader of the pull request sees who said yes and to what ·
-  2026-10-23).
+  words>"] [--sha <commit>]`. The script drafts a GitHub Release tagged `promote/<date>-<sha7>`
+  at the signed-off commit, `origin/main`'s head unless `--sha` names an earlier commit the
+  client saw. Its notes carry who, when, the note, the UAT deployment, the batch, and the line
+  `- promote-sha: <commit>`. The script never publishes (why: the word is recorded where the
+  promotion happens, and the client reads the same notes · 2026-10-23).
 - **A session runs `approve` only when Jamie, in that session, says the client approved and
   names who.** Never from a message it read, a comment, a file or silence (why: the sign-off is
   where the client's judgement enters, and a guess here ships unsigned work · 2026-10-23).
-- **Merge nothing between the sign-off and the promotion.** A merge after the sign-off joins the
-  batch, and the client signs off again (why: the client receives what they tested ·
+- **A commit merged after the sign-off is not promoted.** The promotion is of the signed-off
+  commit and everything before it. A later merge waits for the next batch (why: the client
+  receives what they tested · 2026-10-23).
+- **`release` is a separate process.** With `release` yes, release-please versions `main`: its
+  release pull request and its `v*` tags are not the promotion, and `promote.yml` passes them by
+  (why: a version is a number on `main`, and a promotion is the client's word acted on ·
   2026-10-23).
 
 ## The promotion
 
-The release pull request that release-please opens on each merge to `main` is the batch. Jamie
-merges it after the sign-off is recorded. That merge is the release and the promotion.
-`promote.yml` then runs, after `ci` completes on `main`, in this order. Each job needs the one
-before it.
+Jamie publishes the promotion Release on GitHub. That publish is the promotion. `promote.yml`
+runs on it, in this order. Each job needs the one before it.
 
-1. **The release.** A `v*` tag points at the commit `ci` ran on. No tag means a ticket merged:
-   UAT has it, production waits, and the run ends green and says so.
+1. **The record.** The Release's notes carry `- promote-sha: <commit>`, and the tag's commit is
+   that commit. A Release without the line, or a prerelease, is not a promotion: the run ends
+   green and says so. A line that names another commit fails the run before anything moves
+   (why: only a Release `promote.sh approve` drafted promotes, and it promotes the commit the
+   record names · 2026-10-23).
 2. **The migration.** `db:migrate`, then `db:verify`, against production's connection string,
    the repository secret `DATABASE_URL`. A failed migration stops the promotion, and production
    serves the previous release unchanged (why: a schema that moved with no code behind it is one
    migration to repair, and code that moved with no schema behind it is an outage · 2026-10-23).
-3. **The promotion.** The production deployment of that commit, built when the merge pushed, is
+3. **The promotion.** The production deployment of that commit, built when its merge pushed, is
    read until it is READY, for fifteen minutes at most. ERROR or CANCELED stops the promotion
    with production untouched. One call promotes it (`POST /v10/projects/<id>/promote/<deployment>`)
    and the project is read until that deployment is current. A deployment that is current
-   already is a no-op, so a failed run can be re-run.
+   already is a no-op, so a failed run can be re-run from GitHub.
 4. **One read.** Each production domain is fetched once and its status code printed. No retry,
    no watch. Jamie reads the run.
 
-The checks that must be green before the merge: `ci` on `main`'s head, the UAT deployment of
-that head READY, the staged production build of it READY. `promote.sh status` prints all three.
-The release pull request carries no checks of its own: a pull request opened with the workflow
-token starts no workflow (why: the checks ran on the push that built UAT, and the release commit
-adds the changelog and the version and nothing else · 2026-10-23).
+The checks that must be green before the publish: `ci` on the signed-off commit, the UAT
+deployment of that commit READY, the staged production build of it READY. `promote.sh status`
+prints all three, and `approve` refuses a UAT deployment that is not READY (why: the checks ran
+on the push that built UAT, and the promotion rebuilds nothing · 2026-10-23).
 
 What never happens:
 
-- Nothing promotes on its own. No schedule, no script. The merge is Jamie's. A session never
-  merges the release pull request.
-- No agent calls the promote endpoint. `promote.yml` does, on Jamie's merge.
+- Nothing promotes on its own. No schedule, no script. The publish is Jamie's. A session never
+  publishes a Release.
+- No agent calls the promote endpoint. `promote.yml` does, on Jamie's publish.
+- A Release is never unpublished. A bad production is the rollback below, then a fix as a
+  ticket.
 - No second path to production: no hotfix branch off a tag, no promotion of the UAT deployment
   itself, no push to `main`.
 
 ## A hotfix
 
 A hotfix is a ticket: a triage stub with `priority: P0`. Its merge reaches UAT. To reach
-production, Jamie merges the release pull request at once. A promotion carries everything merged
-before it, so `promote.sh status` says what rides with the fix. Where the bad deployment must
-leave production before the fix is built, the rollback below is the stop-gap.
+production, Jamie records the word and publishes the Release at once. A promotion carries
+everything merged before the signed-off commit, so `promote.sh status` says what rides with the
+fix. Where the bad deployment must leave production before the fix is built, the rollback below
+is the stop-gap.
 
 ## The rollback
 

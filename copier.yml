@@ -42,7 +42,7 @@ release:
   help: >-
     Does release-please cut the releases? Yes adds the release job to ci.yml: each push to main
     opens or updates the release pull request, and Jamie's merge of that pull request is the
-    release. No means production follows main and the merge of a ticket is its release.
+    release. No means no release pull request. Without UAT, production then follows main.
   default: true
 
 uat:
@@ -52,7 +52,7 @@ uat:
     Yes renders .icm/uat/CONTEXT.md, the scripts promote.sh, uat-db.sh and rollback.sh, the
     workflows promote.yml and neon-cleanup.yml, and .env.example: a Vercel custom environment
     `uat` deployed from main on every merge, a Neon branch `uat` for its database, and a
-    promotion that is Jamie's merge of the release pull request. No means the pull request
-    preview is the UAT and production follows main. Asked when release is yes.
+    promotion Jamie publishes as a GitHub Release. No means the pull request preview is the UAT
+    and production follows main. Independent of release: release-please versions main, the
+    promotion moves production.
   default: false
-  when: "{{ release }}"

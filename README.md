@@ -19,9 +19,9 @@ client-specific is ever committed here.
 | `conventions/` | what a rendered repo must keep: `CLAUDE.md` shape, tickets, pull requests and gates, commits, writing, CI, guards, secrets, UAT |
 | `workshop-kit/` | the one-day workshop (Marp) and course material |
 
-`check.yml` renders three proof answer sets on each push (the defaults, every yes, and `release`
-no), lints the rendered workflows, hooks and scripts, and checks that every functionality
-question has a default and a help line.
+`check.yml` renders four proof answer sets on each push (the defaults, every yes, every no, and
+`uat` alone), lints the rendered workflows, hooks and scripts, and checks that every
+functionality question has a default and a help line.
 
 ## The template
 
@@ -34,8 +34,8 @@ three guards and the settings that register them).
 | Question | Yes renders or changes |
 |---|---|
 | `monorepo` | `.gitignore` gains the monorepo caches. `CLAUDE.md` gains an Apps and packages table and says previews, plural |
-| `release` | `ci.yml` gains the `release` job: `.github`'s `release.yml` (release-please) on each push to `main`. `CLAUDE.md` says the release is Jamie's merge of the release pull request. No: production follows `main`, and the merge is the release |
-| `uat` (asked when `release` is yes) | the UAT shape below |
+| `release` | `ci.yml` gains the `release` job: `.github`'s `release.yml` (release-please) on each push to `main`. `CLAUDE.md` says the release is Jamie's merge of the release pull request. No: no release pull request, and without UAT production follows `main` |
+| `uat` | the UAT shape below. Independent of `release`: release-please versions `main`, the promotion moves production |
 
 ### Written once
 
@@ -57,19 +57,19 @@ breakdown, the triage stub, the writing rules and the loop from stub to merge. T
 | File | Does |
 |---|---|
 | `.icm/uat/CONTEXT.md` | the whole UAT contract: the three environments, the database, the batch, the sign-off, the promotion, the rollback, the setup acts and the names |
-| `.icm/scripts/promote.sh` | `status` reads the batch, the release pull request, `ci`, the UAT deployment and the staged production build. `approve --by "<who>"` records the client's word on the release pull request |
+| `.icm/scripts/promote.sh` | `status` reads the batch, any draft promotion, `ci`, the UAT deployment and the staged production build. `approve --by "<who>"` drafts the promotion Release at the signed-off commit, with the client's word in its notes |
 | `.icm/scripts/uat-db.sh` | `status`, `create`, `reset --yes`, `delete --yes`: the Neon branch `uat` (schema only, no rows) and its connection string on the Vercel custom environment |
 | `.icm/scripts/rollback.sh` | names the previous production deployment and prints the rollback command. Runs nothing |
 | `.icm/scripts/lib/vercel.sh`, `lib/neon.sh` | the two transports. A token never reaches a command line |
-| `.github/workflows/promote.yml` | after `ci` on `main`: a `v*` tag at the head → migrate production → promote the staged build → read production once |
+| `.github/workflows/promote.yml` | Jamie publishes the promotion Release → migrate production → promote the staged build of its commit → read production once |
 | `.github/workflows/neon-cleanup.yml` | a pull request closes → its `preview/<branch>` Neon branch is deleted |
 | `.env.example` | the names, with the environments each one reaches. Written once |
 
 The shape in four sentences. Every merge to `main` deploys the Vercel custom environment `uat`
 and builds a staged production deployment. The client tests the batch at the UAT address. Jamie
-records the sign-off and merges the release pull request. That merge migrates production and
-promotes the staged build. No means the pull request preview is the UAT and production follows
-`main`.
+records the sign-off, which drafts a promotion Release, and publishes it. That publish migrates
+production and promotes the staged build. No means the pull request preview is the UAT and
+production follows `main`.
 
 ### How a file renders only on yes
 

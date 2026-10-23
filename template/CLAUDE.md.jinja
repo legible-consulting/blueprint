@@ -45,9 +45,9 @@ build's own rows go below.
 - One ticket is one branch and one pull request. The pull request moves the stub to `_done/`.
 - `main` changes by pull request. Gates are human checkboxes: read them, never tick them. The
   merge is Jamie's.{% if release %} The release is Jamie's merge of the release-please pull
-  request.{% else %} Production follows `main`: the merge is the release.{% endif %}
+  request.{% elif not uat %} Production follows `main`: the merge is the release.{% endif %}
 {%- if uat %}
-- A ticket's merge reaches the UAT environment, where the client tests the batch. The merge of
-  the release pull request is also the promotion to production, after the client's sign-off is
-  recorded. A session never merges it (`.icm/uat/CONTEXT.md`).
+- A ticket's merge reaches the UAT environment, where the client tests the batch. Production
+  moves when Jamie publishes the promotion Release that `promote.sh approve` drafted on the
+  client's word. A session never publishes it (`.icm/uat/CONTEXT.md`).
 {%- endif %}
