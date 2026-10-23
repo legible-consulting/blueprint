@@ -51,8 +51,9 @@ uat:
     Does the client sign each batch off on a UAT environment before it reaches production?
     Yes renders .icm/uat/CONTEXT.md, the scripts promote.sh, uat-db.sh and rollback.sh, the
     workflows promote.yml and neon-cleanup.yml, and .env.example: a Vercel custom environment
-    `uat` deployed from main on every merge, a Neon branch `uat` for its database, and a
-    promotion that is Jamie's merge of the release pull request. No means the pull request
-    preview is the UAT and production follows main. Asked when release is yes.
+    `uat` deployed from main on every merge, a UAT database (a Neon branch `uat`, or a second
+    Neon project), and a promotion that Jamie dispatches with the release tag after the client's
+    sign-off. No means the pull request preview is the UAT and production follows main. Asked
+    when release is yes.
   default: false
   when: "{{ release }}"

@@ -6,13 +6,14 @@
 #
 #   status   the last release tag, the batch since it (git log <tag>..origin/main), the open
 #            release pull request, `ci` on main's head, the UAT deployment of that head, the
-#            staged production build of it, and the setup acts this script can read. Reads only.
+#            staged production build of it, the setup acts this script can read, and the dispatch
+#            command when the last release tag is not promoted yet. Reads only.
 #   approve  THE RECORD OF THE CLIENT'S WORD. Jamie, in this session, says the client approved
 #            and names who. The script posts the record on the open release pull request, names
 #            the batch and the UAT deployment, and stops. It refuses without --by, without an
 #            open release pull request, and when the UAT deployment of main's head is not READY.
-#            It ticks nothing and merges nothing: the merge of the release pull request is the
-#            promotion, and it is Jamie's.
+#            It ticks nothing, merges nothing and dispatches nothing: the merge of the release
+#            pull request and the dispatch of promote.yml are Jamie's.
 #
 # Reads: gh (signed in), git, jq, curl, VERCEL_TOKEN, and VERCEL_TEAM, VERCEL_PROJECT,
 # UAT_ENVIRONMENT when set. Without VERCEL_TOKEN, status prints what git and GitHub know and
@@ -55,9 +56,11 @@ batch="$(git log --oneline --no-decorate "$range")"
 n="$(printf '%s\n' "$batch" | grep -c . || true)"
 
 # --- GitHub: the release pull request and ci on main's head ----------------------------------------
-release_pr="$(gh pr list --state open --label 'autorelease: pending' --json number,url --jq 'first // empty' 2>/dev/null || true)"
+repo="$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null || echo '<owner/name>')"
+release_pr="$(gh pr list --state open --label 'autorelease: pending' --json number,url,title --jq 'first // empty' 2>/dev/null || true)"
 pr_number="$(printf '%s' "$release_pr" | jq -r '.number // empty' 2>/dev/null || true)"
 pr_url="$(printf '%s' "$release_pr" | jq -r '.url // empty' 2>/dev/null || true)"
+pr_version="$(printf '%s' "$release_pr" | jq -r '.title // empty' 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n1 || true)"
 ci="$(gh run list --workflow ci --branch main --commit "$head" --limit 1 --json status,conclusion \
   --jq 'first | "\(.status)\(if .conclusion then " " + .conclusion else "" end)"' 2>/dev/null || true)"
 [ -n "$ci" ] || ci="no run found for $short"
@@ -103,6 +106,16 @@ if [ -n "${VERCEL_TOKEN:-}" ]; then
   else
     prod_line="no production build of $short yet; production serves ${current:-nothing}"
   fi
+  if [ -n "$last_tag" ]; then
+    tag_sha="$(git rev-parse "${last_tag}^{commit}")"
+    tdep="$(vercel_deployment production "$tag_sha")"
+    tid="$(printf '%s' "$tdep" | jq -r '.uid // .id // empty' 2>/dev/null || true)"
+    if [ -n "$tid" ] && [ "$tid" = "$current" ]; then
+      promote_line="$last_tag is promoted ($tid)"
+    else
+      promote_line="$last_tag is not promoted. Jamie runs: gh workflow run promote.yml --repo $repo -f tag=$last_tag"
+    fi
+  fi
 fi
 
 # --- status ----------------------------------------------------------------------------------------
@@ -114,6 +127,7 @@ if [ -n "$pr_number" ]; then echo "release PR: #$pr_number $pr_url"; else echo "
 echo "ci on main: $ci ($short)"
 echo "uat:        $uat_line"
 echo "production: $prod_line"
+[ -z "${promote_line:-}" ] || echo "promote:    $promote_line"
 if [ -n "$setup_lines" ]; then echo "setup:"; printf '%s' "$setup_lines"; fi
 
 if [ "$verb" = status ]; then
@@ -137,9 +151,10 @@ trap 'rm -f "$tmp"' EXIT
   echo "- uat: ${uat_domain:+https://$uat_domain · }deployment ${uat_id} of ${short}"
   echo "- recorded by \`.icm/scripts/promote.sh approve\`"
   echo
-  echo "The merge of this pull request is the promotion. It is Jamie's. Merge nothing else before it."
+  echo "Jamie merges this pull request, then dispatches \`promote.yml\` with its tag. Both acts are Jamie's. Merge nothing else before it."
 } > "$tmp"
 gh pr comment "$pr_number" --body-file "$tmp" >/dev/null
 echo "recorded on $pr_url"
-echo "next: Jamie merges the release pull request. promote.yml then migrates production and promotes the staged build of the release commit."
+echo "next: Jamie merges the release pull request, then runs: gh workflow run promote.yml --repo $repo -f tag=v${pr_version:-<version>}"
+echo "      promote.yml then migrates production and promotes the staged build of the release commit."
 echo "RESULT: RECORDED $pr_url"

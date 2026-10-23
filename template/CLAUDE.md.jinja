@@ -48,6 +48,7 @@ build's own rows go below.
   request.{% else %} Production follows `main`: the merge is the release.{% endif %}
 {%- if uat %}
 - A ticket's merge reaches the UAT environment, where the client tests the batch. The merge of
-  the release pull request is also the promotion to production, after the client's sign-off is
-  recorded. A session never merges it (`.icm/uat/CONTEXT.md`).
+  the release pull request makes the release tag and moves nothing. Production moves when Jamie
+  dispatches `promote.yml` with that tag, after the client's sign-off is recorded. A session
+  never merges it and never dispatches it (`.icm/uat/CONTEXT.md`).
 {%- endif %}
