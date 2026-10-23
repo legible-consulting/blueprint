@@ -71,7 +71,7 @@ Rules:
   environment.** `uat-db.sh create` sets `DATABASE_URL` and `DATABASE_URL_UNPOOLED` on the custom
   environment itself (why: a custom environment that the integration serves receives the
   Preview value, which is production's connection string · 2026-10-23).
-- **The UAT database is migrated at build.** The app's `vercel-build` script runs `db:migrate`,
+- **The UAT database is migrated at build.** The build's `vercel-build` script runs `db:migrate`,
   then `db:verify`, then the build when `VERCEL_ENV` is `preview`. It only builds when
   `VERCEL_ENV` is `production`. `package.json` names the two scripts `db:migrate` and
   `db:verify` (why: one script brings UAT and every preview to the commit it serves, and
@@ -178,7 +178,7 @@ status` marks the ones it can read.
    `VERCEL_PROJECT` when the Vercel project's name differs from the repository's.
 5. In a shell with the same names exported: `.icm/scripts/uat-db.sh create`, then redeploy the
    UAT environment.
-6. The app's own variables on the `uat` environment, from `.env.example`: sandbox keys, never
+6. The application's own variables on the `uat` environment, from `.env.example`: sandbox keys, never
    live ones.
 7. `package.json`: `db:migrate`, `db:verify`, and `vercel-build` as the database rule says.
 
@@ -195,4 +195,4 @@ The names, in one place:
 | `UAT_DB_BRANCH` | the UAT branch's name, or `uat` when unset | the shell |
 | `DATABASE_URL` | production's direct connection string in Actions, and each environment's own on Vercel | Actions secret · Vercel |
 
-Values never enter git. `.env.example` lists the names the app reads.
+Values never enter git. `.env.example` lists the names the application reads.

@@ -1,6 +1,7 @@
-# check: the blueprint's walk test. Every tier is rendered on each pull request and on each
-# push to main, the rendered workflows and hooks are linted, and the files the tiers share
-# are compared byte for byte (CI is truth; never run locally).
+# check: the blueprint's walk test. Three proof answer sets render on each pull request and on
+# each push to main, the rendered workflows, hooks and scripts are linted, and every
+# functionality question is checked for a default and a help line (CI is truth; never run
+# locally).
 name: check
 
 on:
@@ -37,23 +38,24 @@ jobs:
         run: ./gitleaks git --redact --no-banner -v .
 
   render:
-    # Each tier renders into a scratch folder with copier, as a kickoff would, and the app tier
-    # renders twice: with uat and without. The rendered tree must carry the ticket convention,
-    # the pull request template with both gate anchors, a CLAUDE.md under 80 lines and no
-    # BUILD.md. A uat render carries every UAT file; every other render carries none. actionlint
-    # reads the rendered workflows and shellcheck the rendered hooks and scripts, so a template
-    # error fails here and not in a client repo.
+    # The template renders into a scratch folder with copier, as a kickoff would, once per
+    # proof answer set: every default, every yes (monorepo, release, uat), and release no. The
+    # rendered tree must carry the ticket convention, the pull request template with both gate
+    # anchors, a CLAUDE.md under 80 lines and no BUILD.md. A uat render carries every UAT file
+    # and the others none. actionlint reads the rendered workflows and shellcheck the rendered
+    # hooks and scripts, so a template error fails here and not in a client repo.
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { tier: site, uat: "false", name: site }
-          - { tier: app, uat: "false", name: app }
-          - { tier: app, uat: "true", name: app-uat }
-          - { tier: platform, uat: "false", name: platform }
+          - { name: defaults, monorepo: "false", release: "true", uat: "false" }
+          - { name: all, monorepo: "true", release: "true", uat: "true" }
+          - { name: minimal, monorepo: "false", release: "false", uat: "false" }
     env:
-      TIER: ${{ matrix.tier }}
+      NAME: ${{ matrix.name }}
+      MONOREPO: ${{ matrix.monorepo }}
+      RELEASE: ${{ matrix.release }}
       UAT: ${{ matrix.uat }}
       ACTIONLINT_VERSION: 1.7.12
       ACTIONLINT_SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
@@ -69,20 +71,20 @@ jobs:
           curl -fsSLO "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/${f}"
           echo "${ACTIONLINT_SHA256}  ${f}" | sha256sum -c -
           tar -xzf "${f}" actionlint
-      - name: Render the tier
+      - name: Render the answer set
         run: |
           copier copy --defaults --vcs-ref HEAD \
-            -d "tier=${TIER}" -d slug=zz-proof -d client_name="Zz Proof" -d language=en -d "uat=${UAT}" \
+            -d slug=zz-proof -d client_name="Zz Proof" -d language=en \
+            -d "monorepo=${MONOREPO}" -d "release=${RELEASE}" -d "uat=${UAT}" \
             . "${RUNNER_TEMP}/zz-${NAME}"
-        env:
-          NAME: ${{ matrix.name }}
       - name: The rendered tree keeps the conventions
         working-directory: ${{ runner.temp }}/zz-${{ matrix.name }}
         run: |
           fail=0
-          need() { [ -e "$1" ] || { echo "::error::${TIER}: missing $1"; fail=1; }; }
+          need() { [ -e "$1" ] || { echo "::error::${NAME}: missing $1"; fail=1; }; }
           need CLAUDE.md
           need README.md
+          need .gitignore
           need .copier-answers.yml
           need .icm/intake/CONTEXT.md
           need .icm/intake/README.md
@@ -96,33 +98,43 @@ jobs:
           for h in block-local-checks confirm-git-writes guard-plaintext-secrets; do
             need ".claude/hooks/${h}.sh"
           done
-          [ ! -e BUILD.md ] || { echo "::error::${TIER}: BUILD.md must not exist"; fail=1; }
+          [ ! -e BUILD.md ] || { echo "::error::${NAME}: BUILD.md must not exist"; fail=1; }
           uat_files=".icm/uat/CONTEXT.md .icm/scripts/promote.sh .icm/scripts/uat-db.sh .icm/scripts/rollback.sh .icm/scripts/lib/vercel.sh .icm/scripts/lib/neon.sh .github/workflows/promote.yml .github/workflows/neon-cleanup.yml .env.example"
           for f in $uat_files; do
             if [ "$UAT" = true ]; then
-              [ -e "$f" ] || { echo "::error::${TIER} with uat: missing $f"; fail=1; }
+              [ -e "$f" ] || { echo "::error::${NAME}: missing $f"; fail=1; }
             else
-              [ ! -e "$f" ] || { echo "::error::${TIER} without uat: $f must not exist"; fail=1; }
+              [ ! -e "$f" ] || { echo "::error::${NAME}: $f must not exist"; fail=1; }
             fi
           done
           if [ "$UAT" = true ]; then
-            grep -qF '.icm/uat/CONTEXT.md' CLAUDE.md || { echo "::error::${TIER} with uat: CLAUDE.md does not route to .icm/uat/CONTEXT.md"; fail=1; }
-            grep -qF '## Environments' README.md || { echo "::error::${TIER} with uat: README.md has no Environments table"; fail=1; }
+            grep -qF '.icm/uat/CONTEXT.md' CLAUDE.md || { echo "::error::${NAME}: CLAUDE.md does not route to .icm/uat/CONTEXT.md"; fail=1; }
+            grep -qF '## Environments' README.md || { echo "::error::${NAME}: README.md has no Environments table"; fail=1; }
           else
-            ! grep -qF '.icm/uat/CONTEXT.md' CLAUDE.md || { echo "::error::${TIER} without uat: CLAUDE.md routes to .icm/uat/CONTEXT.md"; fail=1; }
+            ! grep -qF '.icm/uat/CONTEXT.md' CLAUDE.md || { echo "::error::${NAME}: CLAUDE.md routes to .icm/uat/CONTEXT.md"; fail=1; }
           fi
+          if [ "$RELEASE" = true ]; then
+            grep -qF 'release.yml' .github/workflows/ci.yml || { echo "::error::${NAME}: ci.yml has no release job"; fail=1; }
+          else
+            ! grep -qF 'release.yml' .github/workflows/ci.yml || { echo "::error::${NAME}: ci.yml has a release job"; fail=1; }
+          fi
+          if [ "$MONOREPO" = true ]; then
+            grep -qxF '.turbo/' .gitignore || { echo "::error::${NAME}: .gitignore lacks the monorepo caches"; fail=1; }
+            grep -qF '## Apps and packages' CLAUDE.md || { echo "::error::${NAME}: CLAUDE.md has no Apps and packages table"; fail=1; }
+          else
+            ! grep -qxF '.turbo/' .gitignore || { echo "::error::${NAME}: .gitignore carries the monorepo caches"; fail=1; }
+          fi
+          ! grep -qF 'tier' .github/workflows/ci.yml || { echo "::error::${NAME}: ci.yml passes a tier"; fail=1; }
           lines="$(wc -l < CLAUDE.md)"
-          [ "$lines" -lt 80 ] || { echo "::error::${TIER}: CLAUDE.md has ${lines} lines (limit 80)"; fail=1; }
+          [ "$lines" -lt 80 ] || { echo "::error::${NAME}: CLAUDE.md has ${lines} lines (limit 80)"; fail=1; }
           for a in gate:spec-approved gate:ready-to-merge; do
             grep -qF "<!-- ${a} -->" .github/pull_request_template.md \
-              || { echo "::error::${TIER}: pull_request_template.md lacks the ${a} anchor"; fail=1; }
+              || { echo "::error::${NAME}: pull_request_template.md lacks the ${a} anchor"; fail=1; }
           done
-          grep -qF "tier: ${TIER}" .github/workflows/ci.yml \
-            || { echo "::error::${TIER}: ci.yml does not pass tier ${TIER}"; fail=1; }
           # A Jinja tag opens with two braces or a brace and a percent sign. A GitHub Actions
           # expression opens with a dollar sign and two braces, and stays.
-          ! grep -rqE '(^|[^$])\{\{|\{%' CLAUDE.md README.md .github .icm \
-            || { echo "::error::${TIER}: an unrendered Jinja tag remains"; fail=1; }
+          ! grep -rqE '(^|[^$])\{\{|\{%' CLAUDE.md README.md .gitignore .github .icm \
+            || { echo "::error::${NAME}: an unrendered Jinja tag remains"; fail=1; }
           exit "$fail"
       - name: actionlint on the rendered workflows
         working-directory: ${{ runner.temp }}/zz-${{ matrix.name }}
@@ -134,24 +146,23 @@ jobs:
         run: |
           find .claude/hooks .icm/scripts -name '*.sh' -print0 | xargs -0 shellcheck --severity=warning
 
-  same-bytes:
-    # The site tier is the source of every shared file. A copy that drifts in app or platform
-    # is the first one to stop guarding (templates/README.md).
+  questions:
+    # Every functionality question (type bool) carries a default and a help line, so a kickoff
+    # can answer with the defaults and a reader knows what yes buys.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: app and platform copies equal the site copies
+      - name: Each bool question has a default and a help line
         run: |
           fail=0
-          shared=".icm/intake/CONTEXT.md .icm/intake/README.md .icm/scripts/new-run.sh .icm/scripts/close-out.sh .github/pull_request_template.md .claude/settings.json .claude/hooks/block-local-checks.sh .claude/hooks/confirm-git-writes.sh .claude/hooks/guard-plaintext-secrets.sh"
-          for t in app platform; do
-            for f in $shared; do
-              cmp -s "templates/site/$f" "templates/$t/$f" \
-                || { echo "::error file=templates/$t/$f::differs from templates/site/$f"; fail=1; }
-            done
-          done
+          while IFS= read -r q; do
+            [ -n "$q" ] || continue
+            yq -e ".\"$q\" | has(\"default\") and has(\"help\")" copier.yml >/dev/null 2>&1 \
+              || { echo "::error file=copier.yml::question $q lacks a default or a help line"; fail=1; }
+            echo "$q: default $(yq ".\"$q\".default" copier.yml)"
+          done < <(yq 'to_entries | .[] | select(.value | type == "!!map" and .type == "bool") | .key' copier.yml)
           exit "$fail"
 
   writing:
