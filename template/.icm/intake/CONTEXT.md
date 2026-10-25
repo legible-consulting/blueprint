@@ -16,7 +16,7 @@ This file is the whole contract. It stands alone: a session that reads only this
   close-out.sh           after the last stub: the epic folder into _done/
 .icm/intake/
   CONTEXT.md             this contract
-  README.md              one paragraph for a person who opens the folder
+  README.md              one paragraph for a person who opens the folder, and the order of the epics
   <epic-slug>/           one folder per epic: related work, cut into order
     breakdown.md         what was understood, and the build order
     <feature-slug>.md    one stub per unit of work: one branch, one pull request
@@ -163,6 +163,54 @@ No breakdown, no `sequence`, no `depends-on`. The acceptance criteria are requir
 line to fill by hand. The folder is a backlog, not a batch. Jamie prunes it. A session only
 adds to it and consumes from it.
 
+### The order of the epics
+
+The build order says which stub of an epic goes first. It does not say which epic goes first.
+When two or more epics are open, `README.md` holds that order under `## Order`. A session
+never sets the order on a guess (why: epics cut at the same time compete for the same weeks,
+and the order is Jamie's call · 2026-10-25).
+
+```md
+## Order
+
+Set by Jamie on <YYYY-MM-DD>.
+
+1. triage
+2. <epic-slug>
+3. <epic-slug>
+```
+
+- **One line per open epic**, and one line for `triage` while it holds an open stub. The
+  pull request whose close-out moves an epic into `_done/` also removes the epic's line.
+- **Classify, then ask.** A session that cuts an epic while another epic is open asks for the
+  order. A session that cuts two or more epics at once also asks. First it classifies every
+  open epic and `triage` in one table, one row each:
+
+  | Column | What it says |
+  |---|---|
+  | Open | The count of open stubs. |
+  | P0 | The count of open `P0` stubs. |
+  | Serves | The deadline, the deal, the milestone, or the break a user sees today. |
+  | Links | Each `depends-on` or `blocked:` line that names a stub of another epic, in both directions. |
+  | Files | The shared files the epic touches: the schema, the lockfile, the layouts, a route. |
+
+  Then it asks one question, the order, with a default from the rules below. It writes
+  Jamie's answer under `## Order` with the date, and stops (why: the table shows the
+  conflicts, and Jamie decides in one reply · 2026-10-25).
+- **The default order**, for the question's default only:
+  1. `triage` first (why: Jamie clears the small chores before an epic starts · 2026-10-25).
+  2. Two epics that touch the same files run one after the other. The epic that adds a route,
+     a card or a column goes before the epic that restyles them (why: a restyle done before
+     the structure changes is done twice · 2026-10-25).
+  3. Then the epic that fixes a break a user sees today. Then the epic with the earliest
+     deadline. Then the epic with more `P0` stubs.
+- **A link across epics moves one stub, not its epic.** An epic can wait on one stub of an
+  epic later in the order. Then that one stub runs before the waiting epic. The rest of its
+  epic keeps its place (why: one stub lifts the block, and a move of the whole epic overrides
+  Jamie's order · 2026-10-25).
+- **A new epic gets a place.** A session that cuts an epic while `## Order` exists asks where
+  the new line goes, with the table, and writes the answer.
+
 ### A user story
 
 A client's document that asks for work, a user story most often, follows one path from the
@@ -221,8 +269,12 @@ scripts in `.icm/scripts/` do the git and GitHub mechanics of one step each. The
 nothing, tick nothing and merge nothing (why: a script does the same thing every time and costs
 no model turn, and the judgement stays with Jamie · 2026-10-21).
 
-1. **Take the next stub.** Read `breakdown.md`, then the open stub with the lowest
-   `sequence` whose `depends-on` is in `_done/`. A triage stub needs no order.
+1. **Take the next stub.** Read `README.md` § Order. Take the first line that has a ready
+   stub. A stub that a link across epics moves forward goes first. In an epic, read
+   `breakdown.md`, then take the open stub with the lowest `sequence` whose `depends-on` is in
+   `_done/` and that has no `blocked:` line. In `triage`, take the open stub with the highest
+   `priority`, then the first by file name. With one epic open and no `## Order`, start at
+   that epic's `breakdown.md`.
 2. **Start it with the script.** `.icm/scripts/new-run.sh <epic>/<slug>` (or
    `triage/<slug>`) cuts the branch `<slug>` (or `triage/<slug>`) from `main`, moves the stub
    into its `_done/`, pushes, and opens the draft pull request from

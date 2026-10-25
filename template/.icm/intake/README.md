@@ -6,4 +6,5 @@ and its folder is its status: open here, done in `_done/`. The desk reads this f
 The contract, the formats and the loop from stub to merge: `CONTEXT.md`.
 
 This page is the repo's own. Copier writes it once. What is true of this backlog goes below:
-the epics in order, the decisions of record that bind them, the milestones.
+`## Order` (the order of the epics, set by Jamie: `CONTEXT.md`, The order of the epics), the
+decisions of record that bind them, the milestones.
