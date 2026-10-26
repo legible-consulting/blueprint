@@ -1,9 +1,9 @@
 # blueprint
 
-Legible Consulting's method, public: one copier template that renders a client build from its
-answers, the conventions every rendered repo follows, and the workshop kit. The questions are
-the bank in `copier.yml`: the slug, the client's name, the language, then `monorepo`, `release`
-and `uat`.
+Legible Consulting's method, public: one copier template that renders a client build, or a
+client's ICM workspace, from its answers, the conventions every rendered repo follows, and the
+workshop kit. The questions are the bank in `copier.yml`: the slug, the client's name, the
+language, `workspace`, then for a build `monorepo`, `release` and `uat`.
 
 ```bash
 copier copy gh:legible-consulting/blueprint ~/Desktop/legible-consulting/projects/<slug>
@@ -19,15 +19,15 @@ The blueprint is MIT licensed: see `LICENSE`.
 |---|---|
 | `template/` | the one template root: the files a build renders. `{{ _copier_conf.answers_file }}.jinja` records the answers |
 | `conventions/` | what a rendered repo must keep: `CLAUDE.md` shape, tickets, pull requests and gates, commits, writing, CI, guards, secrets, UAT |
-| `workshop-kit/` | the one-day workshop (Marp) and course material |
+| `workshop-kit/` | the one-day workshop: the slides (Marp), the exercises and the walk test |
 
-`check.yml` renders three proof answer sets on each push (the defaults, every yes, and `release`
-no), lints the rendered workflows, hooks and scripts, and checks that every functionality
+`check.yml` renders four proof answer sets on each push (the defaults, every yes, `release` no,
+and a workspace), lints the rendered workflows, hooks and scripts, and checks that every functionality
 question has a default and a help line.
 
 ## The template
 
-Every render carries `CLAUDE.md`, `README.md`, `.gitignore`, `.copier-answers.yml`, the ticket
+Every build carries `CLAUDE.md`, `README.md`, `.gitignore`, `.copier-answers.yml`, the ticket
 convention (`.icm/intake/` with `CONTEXT.md`, `README.md` and the empty `_done/` folders),
 `.icm/scripts/new-run.sh` and `close-out.sh`, `.github/pull_request_template.md` (the gates at
 the top), `.github/workflows/ci.yml` calling `.github`'s `check-client`, and `.claude/` (the
@@ -35,6 +35,7 @@ three guards and the settings that register them).
 
 | Question | Yes renders or changes |
 |---|---|
+| `workspace` | a client's ICM workspace instead of a build: see The workspace below. `monorepo`, `release` and `uat` are asked only on no |
 | `monorepo` | `.gitignore` gains the monorepo caches. `CLAUDE.md` gains an Apps and packages table and says previews, plural |
 | `release` | `ci.yml` gains the `release` job: `.github`'s `release.yml` (release-please) on each push to `main`. `CLAUDE.md` says the release is Jamie's merge of the release pull request. No: production follows `main`, and the merge is the release |
 | `uat` (asked when `release` is yes) | the UAT shape below |
@@ -73,8 +74,27 @@ records the sign-off, merges the release pull request, and dispatches `promote.y
 That run migrates production and promotes the staged build. No means the pull request preview is
 the UAT and production follows `main`.
 
+### The workspace
+
+A coaching client leaves with a workspace for their own job, rendered with `workspace` yes.
+It has no code, no tickets and no releases.
+
+| File | Is |
+|---|---|
+| `CLAUDE.md` | the map: what the folder holds, one routing row per stage, the rules. Written once |
+| `01-collect/CONTEXT.md`, `02-draft/CONTEXT.md`, `03-deliver/CONTEXT.md` | the stage contracts: `status: stub`, `## Inputs`, `## Process`, `## Outputs` with lines in angle brackets that the first coaching hour fills. Written once |
+| `02-draft/CONTEXT.md` § Gate | the example gate: a checkbox, the role of the person who ticks it, and the stage that waits |
+| `.github/workflows/ci.yml` | `.github`'s `check-client` with `workspace: true`: every `CONTEXT.md` keeps the three sections |
+| `README.md`, `.gitignore`, `.copier-answers.yml`, `.claude/` | as in a build |
+
+No `.icm/`, no pull request template, no release job. The stage folders keep their names: a
+renamed folder comes back on the next `copier update`. The job's own words go in the contract
+title and the routing row. The walk test in `workshop-kit/walk-test.md` is the test the
+workspace must pass.
+
 ### How a file renders only on yes
 
 A file or folder named `{% if uat %}name{% endif %}` renders to an empty name on no, and copier
-skips it. The content of such a file is copied as is unless its name ends in `.jinja`, so a
+skips it. The build's own paths (`.icm/`, the pull request template) carry
+`{% if not workspace %}` in the same way. The content of such a file is copied as is unless its name ends in `.jinja`, so a
 workflow's `${{ }}` expressions stay untouched.

@@ -1,5 +1,10 @@
+{% if workspace -%}
+# ci: the workspace's contract check, defined once in legible-consulting/.github: every
+# CONTEXT.md keeps Inputs, Process and Outputs (CI is truth; never run locally).
+{%- else -%}
 # ci: the client checks{% if release %} and the release{% endif %}, defined once in legible-consulting/.github (CI is
 # truth; never run locally).
+{%- endif %}
 name: ci
 
 on:
@@ -17,7 +22,10 @@ concurrency:
 jobs:
   check:
     uses: legible-consulting/.github/.github/workflows/check-client.yml@main
-{%- if release %}
+{%- if workspace %}
+    with:
+      workspace: true
+{%- elif release %}
 
   release:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'

@@ -1,6 +1,11 @@
 # {{ client_name }}
 
+{% if workspace -%}
+An ICM workspace, rendered in coaching with Legible Consulting. The map: `CLAUDE.md`. The
+stages: `01-collect/`, `02-draft/`, `03-deliver/`, each with its `CONTEXT.md`.
+{%- else -%}
 Built by Legible Consulting. Tickets: `.icm/intake/`. Conventions: `CLAUDE.md`.
+{%- endif %}
 {%- if uat %}
 
 ## Environments

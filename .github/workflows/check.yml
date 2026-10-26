@@ -1,5 +1,5 @@
-# check: the blueprint's walk test. Three proof answer sets render on each pull request and on
-# each push to main, the rendered workflows, hooks and scripts are linted, and every
+# check: the blueprint's walk test. Four proof answer sets render on each pull request and on
+# each push to main (three builds and one workspace), the rendered workflows, hooks and scripts are linted, and every
 # functionality question is checked for a default and a help line (CI is truth; never run
 # locally).
 name: check
@@ -39,21 +39,25 @@ jobs:
 
   render:
     # The template renders into a scratch folder with copier, as a kickoff would, once per
-    # proof answer set: every default, every yes (monorepo, release, uat), and release no. The
-    # rendered tree must carry the ticket convention, the pull request template with both gate
-    # anchors, a CLAUDE.md under 80 lines and no BUILD.md. A uat render carries every UAT file
-    # and the others none. actionlint reads the rendered workflows and shellcheck the rendered
+    # proof answer set: every default, every yes (monorepo, release, uat), release no, and a
+    # workspace. A build must carry the ticket convention, the pull request template with both
+    # gate anchors, a CLAUDE.md under 80 lines and no BUILD.md. A uat render carries every UAT
+    # file and the others none. A workspace carries the three stage contracts, each with
+    # Inputs, Process, Outputs and status: stub, one gate, and a ci.yml that asks for the
+    # contract check, and no build file. actionlint reads the rendered workflows and shellcheck the rendered
     # hooks and scripts, so a template error fails here and not in a client repo.
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { name: defaults, monorepo: "false", release: "true", uat: "false" }
-          - { name: all, monorepo: "true", release: "true", uat: "true" }
-          - { name: minimal, monorepo: "false", release: "false", uat: "false" }
+          - { name: defaults, workspace: "false", monorepo: "false", release: "true", uat: "false" }
+          - { name: all, workspace: "false", monorepo: "true", release: "true", uat: "true" }
+          - { name: minimal, workspace: "false", monorepo: "false", release: "false", uat: "false" }
+          - { name: workspace, workspace: "true", monorepo: "false", release: "false", uat: "false" }
     env:
       NAME: ${{ matrix.name }}
+      WORKSPACE: ${{ matrix.workspace }}
       MONOREPO: ${{ matrix.monorepo }}
       RELEASE: ${{ matrix.release }}
       UAT: ${{ matrix.uat }}
@@ -74,10 +78,11 @@ jobs:
       - name: Render the answer set
         run: |
           copier copy --defaults --vcs-ref HEAD \
-            -d slug=zz-proof -d client_name="Zz Proof" -d language=en \
+            -d slug=zz-proof -d client_name="Zz Proof" -d language=en -d "workspace=${WORKSPACE}" \
             -d "monorepo=${MONOREPO}" -d "release=${RELEASE}" -d "uat=${UAT}" \
             . "${RUNNER_TEMP}/zz-${NAME}"
-      - name: The rendered tree keeps the conventions
+      - name: The rendered build keeps the conventions
+        if: matrix.workspace == 'false'
         working-directory: ${{ runner.temp }}/zz-${{ matrix.name }}
         run: |
           fail=0
@@ -125,6 +130,7 @@ jobs:
             ! grep -qxF '.turbo/' .gitignore || { echo "::error::${NAME}: .gitignore carries the monorepo caches"; fail=1; }
           fi
           ! grep -qF 'tier' .github/workflows/ci.yml || { echo "::error::${NAME}: ci.yml passes a tier"; fail=1; }
+          ! grep -qF 'workspace' .github/workflows/ci.yml || { echo "::error::${NAME}: ci.yml passes workspace"; fail=1; }
           lines="$(wc -l < CLAUDE.md)"
           [ "$lines" -lt 80 ] || { echo "::error::${NAME}: CLAUDE.md has ${lines} lines (limit 80)"; fail=1; }
           for a in gate:spec-approved gate:ready-to-merge; do
@@ -136,6 +142,46 @@ jobs:
           ! grep -rqE '(^|[^$])\{\{|\{%' CLAUDE.md README.md .gitignore .github .icm \
             || { echo "::error::${NAME}: an unrendered Jinja tag remains"; fail=1; }
           exit "$fail"
+      - name: The rendered workspace keeps the conventions
+        if: matrix.workspace == 'true'
+        working-directory: ${{ runner.temp }}/zz-${{ matrix.name }}
+        run: |
+          fail=0
+          need() { [ -e "$1" ] || { echo "::error::${NAME}: missing $1"; fail=1; }; }
+          never() { [ ! -e "$1" ] || { echo "::error::${NAME}: $1 must not exist"; fail=1; }; }
+          need CLAUDE.md
+          need README.md
+          need .gitignore
+          need .copier-answers.yml
+          need .github/workflows/ci.yml
+          need .claude/settings.json
+          for h in block-local-checks confirm-git-writes guard-plaintext-secrets; do
+            need ".claude/hooks/${h}.sh"
+          done
+          # A workspace has no tickets, no pull request template and no release: no build file.
+          never .icm
+          never .github/pull_request_template.md
+          never BUILD.md
+          never .env.example
+          for d in 01-collect 02-draft 03-deliver; do
+            f="${d}/CONTEXT.md"
+            need "$f"
+            [ -e "$f" ] || continue
+            for sec in Inputs Process Outputs; do
+              grep -qx "## ${sec}" "$f" || { echo "::error::${NAME}: ${f} lacks '## ${sec}'"; fail=1; }
+            done
+            grep -qx 'status: stub' "$f" || { echo "::error::${NAME}: ${f} is not status: stub"; fail=1; }
+            grep -qF "\`${f}\`" CLAUDE.md || { echo "::error::${NAME}: CLAUDE.md does not route to ${f}"; fail=1; }
+          done
+          gates="$(cat ./*/CONTEXT.md | grep -c '^- \[ \]' || true)"
+          [ "$gates" -eq 1 ] || { echo "::error::${NAME}: ${gates} example gates (want 1)"; fail=1; }
+          grep -qx '      workspace: true' .github/workflows/ci.yml || { echo "::error::${NAME}: ci.yml does not pass workspace: true"; fail=1; }
+          ! grep -qF 'release.yml' .github/workflows/ci.yml || { echo "::error::${NAME}: ci.yml has a release job"; fail=1; }
+          lines="$(wc -l < CLAUDE.md)"
+          [ "$lines" -lt 80 ] || { echo "::error::${NAME}: CLAUDE.md has ${lines} lines (limit 80)"; fail=1; }
+          ! grep -rqE '(^|[^$])\{\{|\{%' CLAUDE.md README.md .gitignore .github ./*/CONTEXT.md \
+            || { echo "::error::${NAME}: an unrendered Jinja tag remains"; fail=1; }
+          exit "$fail"
       - name: actionlint on the rendered workflows
         working-directory: ${{ runner.temp }}/zz-${{ matrix.name }}
         # The rendered folder is not a git repo, so the files are named instead of found.
@@ -143,8 +189,11 @@ jobs:
           "${GITHUB_WORKSPACE}/actionlint" -color .github/workflows/*.yml
       - name: shellcheck on the rendered hooks and scripts
         working-directory: ${{ runner.temp }}/zz-${{ matrix.name }}
+        # A workspace has no .icm/scripts: only the folders the render has are read.
         run: |
-          find .claude/hooks .icm/scripts -name '*.sh' -print0 | xargs -0 shellcheck --severity=warning
+          dirs=(.claude/hooks)
+          [ -d .icm/scripts ] && dirs+=(.icm/scripts)
+          find "${dirs[@]}" -name '*.sh' -print0 | xargs -0 shellcheck --severity=warning
 
   questions:
     # Every functionality question (type bool) carries a default and a help line, so a kickoff
