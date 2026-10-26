@@ -1,5 +1,6 @@
-# Legible Consulting — client build template. One root, template/. The questions below decide
-# what renders: a file or folder whose name carries a question renders only on yes.
+# Legible Consulting — client template. One root, template/. It renders a client build, or with
+# workspace yes a client's ICM workspace. The questions below decide what renders: a file or
+# folder whose name carries a question renders only on yes.
 _min_copier_version: "9.0.0"
 _subdirectory: template
 _answers_file: .copier-answers.yml
@@ -15,6 +16,10 @@ _skip_if_exists:
   - CLAUDE.md
   - .gitignore
   - "{% if uat %}.env.example{% endif %}"
+  # A workspace's stage contracts are the client's from the first coaching hour.
+  - "{% if workspace %}01-collect{% endif %}/CONTEXT.md"
+  - "{% if workspace %}02-draft{% endif %}/CONTEXT.md"
+  - "{% if workspace %}03-deliver{% endif %}/CONTEXT.md"
 
 slug:
   type: str
@@ -30,12 +35,23 @@ language:
   help: Language of client-facing text (BCP 47, e.g. pt-PT, en, nl, fr, de)
   default: pt-PT
 
+workspace:
+  type: bool
+  help: >-
+    Is this a client's ICM workspace for coaching, not a build? Yes renders CLAUDE.md as the
+    workspace map, three stage folders (01-collect, 02-draft, 03-deliver) with a stub
+    CONTEXT.md each, one example gate, and a ci.yml that asks check-client for the contract
+    check. It renders no build file: no .icm/, no pull request template, no release job.
+    monorepo, release and uat are asked only on no.
+  default: false
+
 monorepo:
   type: bool
   help: >-
     Is this one repository of several apps and shared packages? Yes adds the monorepo caches
     to .gitignore and an Apps and packages table to CLAUDE.md.
   default: false
+  when: "{{ not workspace }}"
 
 release:
   type: bool
@@ -44,6 +60,7 @@ release:
     opens or updates the release pull request, and Jamie's merge of that pull request is the
     release. No means production follows main and the merge of a ticket is its release.
   default: true
+  when: "{{ not workspace }}"
 
 uat:
   type: bool
@@ -56,4 +73,4 @@ uat:
     sign-off. No means the pull request preview is the UAT and production follows main. Asked
     when release is yes.
   default: false
-  when: "{{ release }}"
+  when: "{{ release and not workspace }}"
