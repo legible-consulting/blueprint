@@ -1,6 +1,7 @@
 # Conventions
 
-What every rendered repo keeps, whatever its answers. Estate conformance (D4 in the house)
+What every rendered build keeps, whatever its answers. A workspace (`workspace` yes) keeps the
+rows marked so. Estate conformance (D4 in the house)
 compares a repo against this list and against the blueprint tag its `.copier-answers.yml`
 names.
 
@@ -15,5 +16,6 @@ names.
 | Commits | Conventional Commits. With `release` yes, the release is Jamie's merge of the release-please pull request. With no, production follows `main` and the merge is the release. |
 | Writing | Technical text in Simplified Technical English: stubs, breakdowns, pull request bodies, commit messages, hook text. Questions for Jamie are numbered and carry a default answer. Client-facing text in the client's language. |
 | CI | `ci.yml` calls the reusable workflows in `legible-consulting/.github`. Nothing is copied in. Never run build, lint, typecheck, test, format or dev locally. |
-| Guards | `.claude/settings.json` and the three hooks in `.claude/hooks/` are the blueprint's, byte for byte, so cloud sessions are guarded too. |
-| Secrets | Never in git. Names only, in an `.env.example`. Values in GitHub or Vercel settings. A UAT build's scripts and workflows read `VERCEL_TOKEN`, `NEON_API_KEY` and `DATABASE_URL` as secrets, `VERCEL_TEAM`, `VERCEL_PROJECT` and `NEON_PROJECT_ID` as variables. |
+| Guards | `.claude/settings.json` and the three hooks in `.claude/hooks/` are the blueprint's, byte for byte, so cloud sessions are guarded too. A workspace keeps them. |
+| Workspace | A workspace keeps: `CLAUDE.md` as the map, under 80 lines, one routing row per stage. One folder per stage, numbered, each with a `CONTEXT.md` that has `## Inputs`, `## Process` and `## Outputs`. At least one gate that names the role of the person who ticks it. `ci.yml` calls `check-client` with `workspace: true`. No `.icm/`, no pull request template. It passes `workshop-kit/walk-test.md`. |
+| Secrets | Never in git. A workspace keeps this row. Names only, in an `.env.example`. Values in GitHub or Vercel settings. A UAT build's scripts and workflows read `VERCEL_TOKEN`, `NEON_API_KEY` and `DATABASE_URL` as secrets, `VERCEL_TEAM`, `VERCEL_PROJECT` and `NEON_PROJECT_ID` as variables. |
