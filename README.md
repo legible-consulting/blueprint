@@ -13,6 +13,8 @@ copier update   # inside a rendered repo, after a new tag here
 Tags are the versions `copier update` compares (PEP 440: `v0.1.0`, `v0.2.0`, …). Nothing
 client-specific is ever committed here.
 
+The blueprint is MIT licensed: see `LICENSE`.
+
 | Folder | Holds |
 |---|---|
 | `template/` | the one template root: the files a build renders. `{{ _copier_conf.answers_file }}.jinja` records the answers |
