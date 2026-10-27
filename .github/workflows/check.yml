@@ -111,6 +111,18 @@ jobs:
           need .github/pull_request_template.md
           need .icm/scripts/new-run.sh
           need .icm/scripts/close-out.sh
+          # Each lane contract keeps the three sections and stays under 60 lines. A workspace
+          # has no .icm, so it has no lane.
+          for l in bug tweak chore hotfix; do
+            f=".icm/lanes/${l}/CONTEXT.md"
+            need "$f"
+            [ -e "$f" ] || continue
+            for sec in Inputs Process Outputs; do
+              grep -qx "## ${sec}" "$f" || { echo "::error::${NAME}: ${f} lacks '## ${sec}'"; fail=1; }
+            done
+            n="$(wc -l < "$f")"
+            [ "$n" -lt 60 ] || { echo "::error::${NAME}: ${f} has ${n} lines (limit 60)"; fail=1; }
+          done
           need .github/workflows/ci.yml
           need .claude/settings.json
           for h in block-local-checks confirm-git-writes guard-plaintext-secrets; do

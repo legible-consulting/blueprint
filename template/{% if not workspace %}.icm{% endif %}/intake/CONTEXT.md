@@ -29,7 +29,7 @@ This file is the whole contract. It stands alone: a session that reads only this
     <feature-slug>.md    one stub per unit of work: one branch, one pull request
     _done/               stubs whose pull request merged
   triage/                one-off findings that belong to no epic
-    <slug>.md            a bug, a tweak or a chore
+    <slug>.md            a bug, a tweak, a chore or a hotfix
     _done/
   _done/                 epics whose last stub merged, moved whole
 ```
@@ -147,7 +147,7 @@ moves on. Never widen a pull request to absorb it. Never lose it in chat.
 ```md
 # Stub: <title>
 
-- lane: bug | tweak | chore
+- lane: bug | tweak | chore | hotfix
 - found-by: <where> · <YYYY-MM-DD>
 - complexity: low | medium | high | research
 - priority: P0 | P1 | P2
