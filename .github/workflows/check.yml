@@ -81,6 +81,19 @@ jobs:
             -d slug=zz-proof -d client_name="Zz Proof" -d language=en -d "workspace=${WORKSPACE}" \
             -d "monorepo=${MONOREPO}" -d "release=${RELEASE}" -d "uat=${UAT}" \
             . "${RUNNER_TEMP}/zz-${NAME}"
+      - name: The rendered settings deny each env file by name
+        working-directory: ${{ runner.temp }}/zz-${{ matrix.name }}
+        # A glob such as .env.* also matches .env.example, the file the kickoff and the UAT
+        # setup tell a session to read. The deny list names each secret env file instead.
+        run: |
+          fail=0
+          deny="$(jq -r '.permissions.deny[]' .claude/settings.json)" \
+            || { echo "::error::${NAME}: .claude/settings.json does not parse as JSON"; exit 1; }
+          grep -qxF 'Read(./**/.env.local)' <<<"$deny" \
+            || { echo "::error::${NAME}: the deny list does not name .env.local"; fail=1; }
+          ! grep -qF '.env.*)' <<<"$deny" \
+            || { echo "::error::${NAME}: the deny list has a .env.* glob, which blocks .env.example"; fail=1; }
+          exit "$fail"
       - name: The rendered build keeps the conventions
         if: matrix.workspace == 'false'
         working-directory: ${{ runner.temp }}/zz-${{ matrix.name }}
