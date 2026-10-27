@@ -1,6 +1,6 @@
 ---
 name: pr-conventions
-description: "The git and GitHub mechanics of a ticket in this repo: the branch, the commit, the push, the pull request body and the CI read. Use before you commit, cut a branch, push, open or edit a pull request, or read CI. Triggers: commit, branch, push, pull request, PR, CI, checks."
+description: "The git and GitHub mechanics of a ticket in this repo. They are the branch, the commit, the push, the pull request body and the CI read. Use before you commit, cut a branch, push, open or edit a pull request, or read CI. Triggers: commit, branch, push, pull request, PR, CI, checks."
 ---
 
 # Pull request conventions — the mechanics
@@ -16,7 +16,7 @@ contract wins.
   2026-10-27).
 - `main` changes by pull request only. Do not commit to `main`. Do not push to `main`.
 - Do not rewrite the history of a pushed branch. Do not force push. A wrong commit gets a new
-  commit that corrects it.
+  commit that fixes it.
 
 ## Committing
 
@@ -66,7 +66,7 @@ contract wins.
   3. Write it back with `gh pr edit <n> --body-file <file>`.
 
   Never write a body from a local copy (why: Jamie ticks the gates on GitHub, and a stale copy
-  erases the ticks · 2026-10-27).
+  removes the ticks · 2026-10-27).
 - Never tick a gate box. Remove a tick only where the contract's § Revise says so.
 - Keep each gate anchor as it is. The desk finds the gates by their anchors.
 

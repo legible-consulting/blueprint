@@ -23,7 +23,7 @@ Each stage folder has a `CONTEXT.md`: what the stage reads (Inputs), what it doe
 |---|---|
 | collect or sort the inputs of the job | `01-collect/CONTEXT.md` |
 | write the draft | `02-draft/CONTEXT.md` |
-| finish and deliver the output | `03-deliver/CONTEXT.md`, after the gate in `02-draft/CONTEXT.md` is ticked |
+| finish and deliver the output | `03-deliver/CONTEXT.md`, after a person ticks the gate in `02-draft/CONTEXT.md` |
 | add a stage or a job | one folder and one `CONTEXT.md` for the stage, one row in this table |
 
 ## Rules
@@ -33,7 +33,7 @@ Each stage folder has a `CONTEXT.md`: what the stage reads (Inputs), what it doe
   not the conversation.
 - A gate is a person's checkbox. Read it, never tick it. The stage after a gate starts only
   when the person named at the gate ticked it.
-- Method apart from facts: a `CONTEXT.md` says how the job is done. The facts of one case
+- Method apart from facts: a `CONTEXT.md` says how to do the job. The facts of one case
   stay in that case's files.
 - CI checks that every `CONTEXT.md` has Inputs, Process and Outputs. Push, then read the
   `ci` run.
@@ -86,7 +86,7 @@ build's own rows go below.
 - Client-facing text in `{{ language }}`. Code, commits and notes in English.
 - Technical text (stubs, pull request bodies, commits, questions) in Simplified Technical
   English: short active sentences, one instruction each, no semicolons. A question for Jamie
-  is numbered and carries a default answer.
+  has a number and a default answer.
 - CI is truth: never run build, lint, typecheck, test, format or dev locally. Push, then read
   the `ci` run and the preview{% if monorepo %}s{% endif %}.
 - Secrets never in git: names only, values in GitHub or Vercel settings. Flag any plaintext
@@ -103,6 +103,6 @@ build's own rows go below.
 - A ticket's merge reaches the UAT environment, where the client tests the batch. The merge of
   the release pull request makes the release tag and moves nothing. Production moves when the
   session dispatches `promote.yml` with `.icm/scripts/promote.sh run`, on Jamie's word, after the
-  client's sign-off is recorded (`.icm/uat/CONTEXT.md`).
+  session records the client's sign-off (`.icm/uat/CONTEXT.md`).
 {%- endif %}
 {%- endif %}

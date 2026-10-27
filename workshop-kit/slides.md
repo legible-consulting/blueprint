@@ -63,7 +63,7 @@ Simple, then complex underneath, then simple again on top.
 
 # Hour 1 — The desk
 
-<!-- source: 01_the-three-layers/01_chat.md; 05_history-and-concepts/04_the-ladder-that-explains-every-ai-failure.md (the task triage) -->
+<!-- source: 01_the-three-layers/01_chat.md, 05_history-and-concepts/04_the-ladder-that-explains-every-ai-failure.md (the task triage) -->
 
 ---
 
@@ -94,7 +94,7 @@ Most of the work is not the model. Start from the work, not from the tool.
 
 In chat, you answer these questions again every time.
 
-The rest of the day removes them: a file answers each one, once.
+The rest of the day ends them: a file answers each one, once.
 
 ---
 
@@ -127,7 +127,7 @@ A wrong promise costs more than a stiff sentence.
 1. Give the model your list of corrections.
 2. Let it ask you questions: the purpose, when to use it, one good example.
 3. It writes a short file: a name, when to use it, the steps.
-4. **You read it.** A model sometimes adds a rule you never said, or makes one example into a law. You fix it.
+4. **You read it.** A model sometimes adds a rule you never said, or makes one example into a law. You correct it.
 5. Test it in a **new** conversation, with a one-line request.
 
 ---
@@ -163,7 +163,7 @@ The contract is plain text. It moves to the next tool with you.
 
 # Hour 3 — The folder and the map
 
-<!-- source: 01_the-three-layers/03_folders-agent.md; 02_build-it-around-your-work/01_start-with-outcome.md; 02_build-it-around-your-work/02_design-your-folder.md; 02_build-it-around-your-work/03_one-model-different-jobs.md -->
+<!-- source: 01_the-three-layers/03_folders-agent.md, 02_build-it-around-your-work/01_start-with-outcome.md, 02_build-it-around-your-work/02_design-your-folder.md, 02_build-it-around-your-work/03_one-model-different-jobs.md -->
 
 ---
 
@@ -186,7 +186,7 @@ The output helps someone decide. Measure it by how fast and how well they decide
 - **A middle share:** the tools you have already: the spreadsheet, the calendar, the mailbox.
 - **A small share:** the model.
 
-Facts beat prose: a wrong date is not fixed by a better sentence. It is fixed by the file that holds the date.
+Facts beat prose: a better sentence does not correct a wrong date. The file that holds the date corrects it.
 
 ---
 
@@ -208,7 +208,7 @@ Each stage: what it **reads**, what it **does**, what it **writes**.
 
 ## The map
 
-- What the folder holds. Where each job goes. How files are named.
+- What the folder holds. Where each job goes. How to name files.
 - A routing table: for each job, the files to open, the contract to apply, where the result goes.
 - **Keep it short.** A map that lists every file puts the whole drawer back on the desk.
 
@@ -263,7 +263,7 @@ copier copy gh:legible-consulting/blueprint <folder> --data workspace=true
 
 # Hour 5 — Contracts and the gate
 
-<!-- source: 03_automate-it-keep-your-judgment/01_stages-you-can-step-into.md; 03_automate-it-keep-your-judgment/02_steady-parts-into-code.md -->
+<!-- source: 03_automate-it-keep-your-judgment/01_stages-you-can-step-into.md, 03_automate-it-keep-your-judgment/02_steady-parts-into-code.md -->
 
 ---
 

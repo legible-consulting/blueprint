@@ -38,12 +38,12 @@ the Vercel Preview environment, scoped to the git branch. The pull request close
 
 - The variable means: this deployment owns its database. A preview branch carries it from
   `preview-db.sh`. A plain preview never carries it (why: a preview without its own branch must
-  not migrate the base, and the first build of a pull request can run before its branch
+  not migrate the base. The first build of a pull request can run before its branch
   exists · 2026-10-27).
 - With UAT, `uat` carries it always and production never, because `promote.yml` migrates
   production. Without UAT, Production carries it always: the build of `main` migrates
   production, then serves it.
-- `db:migrate` uses `DATABASE_URL_UNPOOLED` when it is set: a migration needs a direct connection.
+- `db:migrate` uses `DATABASE_URL_UNPOOLED` when it has a value: a migration needs a direct connection.
 - A migration at build runs while the previous deployment still serves. So a migration must be
   forward-compatible with the code it replaces.
 

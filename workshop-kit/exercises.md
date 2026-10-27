@@ -2,12 +2,12 @@
 
 One exercise per hour of the day in `slides.md`. Attendees work in pairs, on their own real
 work. Each exercise has a goal, the steps, what the attendee leaves with, and a check. A second
-person does the check in two minutes. An exercise is done when its check passes, not when the
+person does the check in two minutes. An exercise ends when its check passes, not when the
 hour ends.
 
-Tool steps were checked on 2026-10-26. They work in a chat tool with projects (the contract
-goes in the project's instructions) and in an agent that works in a folder, such as Claude
-Code or Codex (the contract is a file). When a tool changes, the step changes and the method
+Last check of the tool steps: 2026-10-26. They work in a chat tool with projects, where the
+contract goes in the project's instructions. They also work in an agent that works in a
+folder, such as Claude Code or Codex, where the contract is a file. When a tool changes, the step changes and the method
 stays.
 
 Sources, in `legible-consulting/library` (read only), under
@@ -18,7 +18,7 @@ Sources, in `legible-consulting/library` (read only), under
 
 ## 1. Sort your week, correct one real job
 
-Hour 1, the desk. Source: `01_the-three-layers/01_chat.md`;
+Hour 1, the desk. Source: `01_the-three-layers/01_chat.md`,
 `05_history-and-concepts/04_the-ladder-that-explains-every-ai-failure.md` (the task triage).
 
 **Goal.** See where the model has a place in your week, and collect the corrections that one
@@ -42,7 +42,7 @@ lines. The job is one that recurs.
 
 ## 2. Turn the corrections into a contract
 
-Hour 2, the written process. Source: `01_the-three-layers/02_skills.md`;
+Hour 2, the written process. Source: `01_the-three-layers/02_skills.md`,
 `01_the-three-layers/04_pick-your-setup.md`.
 
 **Goal.** Write the job's method down once, so that you stop answering the same questions.
@@ -65,16 +65,16 @@ fewer corrections than in exercise 1. The contract names no client, order or pri
 
 ## 3. Map one job: reads, makes, stages
 
-Hour 3, the folder and the map. Source: `02_build-it-around-your-work/01_start-with-outcome.md`;
-`02_build-it-around-your-work/02_design-your-folder.md`;
+Hour 3, the folder and the map. Source: `02_build-it-around-your-work/01_start-with-outcome.md`,
+`02_build-it-around-your-work/02_design-your-folder.md`,
 `01_the-three-layers/03_folders-agent.md`.
 
 **Goal.** Cut the job into stages, each of which reads files and writes one file.
 
 **Steps.**
 
-1. Answer the four questions on paper: who the work is for, what they do next, where the
-   information comes from today, what breaks and who feels it.
+1. Answer the four questions on paper. Who is the work for? What do they do next? Where does
+   the information come from today? What breaks, and who feels it?
 2. Write the steps of the job. For each step: what it reads, what it makes.
 3. Group the steps into three stages: collect, draft, deliver.
 4. Sort the job's files into four piles: method, facts, work in progress, outputs.
@@ -95,11 +95,11 @@ map from exercise 3.
 
 **Steps.**
 
-1. Make the workspace: render it from the blueprint
+1. Make the workspace. Render it from the blueprint
    (`copier copy gh:legible-consulting/blueprint <folder> --data workspace=true`), or make the
    folders by hand: a map file, `01-collect/`, `02-draft/`, `03-deliver/`, each with a
    `CONTEXT.md`.
-2. Write the map: what the folder holds, one routing row per stage, how files are named.
+2. Write the map: what the folder holds, one routing row per stage, how to name files.
 3. Keep the map on one screen.
 4. Put the contract from exercise 2 where the draft stage reads it.
 5. Put one real input in `01-collect/`.
@@ -111,7 +111,7 @@ input goes into and which stage writes the draft.
 
 ## 5. Write the contracts, name the gate
 
-Hour 5, contracts and the gate. Source: `03_automate-it-keep-your-judgment/01_stages-you-can-step-into.md`;
+Hour 5, contracts and the gate. Source: `03_automate-it-keep-your-judgment/01_stages-you-can-step-into.md`,
 `03_automate-it-keep-your-judgment/02_steady-parts-into-code.md`.
 
 **Goal.** Each stage knows what it reads, what it does and what it writes. A person checks the
@@ -122,7 +122,7 @@ draft before it goes further.
 1. In each `CONTEXT.md`, write three sections: `## Inputs`, `## Process`, `## Outputs`. One
    instruction per line.
 2. Inputs name files, not folders.
-3. In the draft stage, write the gate: one checkbox, the role of the person who ticks it, and
+3. In the draft stage, write the gate. It has one checkbox, the role of the person who ticks it, and
    the rule that the deliver stage starts only after the tick.
 4. Find each step that must give the same output every time: a total, a date, a reference.
    Give it to a tool (the spreadsheet, the ERP, a script). Write which tool in the Process.
@@ -131,7 +131,7 @@ draft before it goes further.
 **You leave with.** Three contracts and one gate.
 
 **Check.** Your partner reads each contract and finds Inputs, Process and Outputs. The gate
-names a role. No step that must be exact is left to the model.
+names a role. The model does no step that must be exact.
 
 ## 6. One real run, step in at the gate
 
@@ -143,7 +143,7 @@ Hour 6, run it once.
 
 1. Start a new session on the workspace.
 2. Ask for each stage with one short request.
-3. Watch which files the model opens. When it opens a wrong file, fix the map row or the
+3. Watch which files the model opens. When it opens a wrong file, correct the map row or the
    Inputs line, and run the stage again.
 4. Read the draft. Step in: add, shorten, delete. Tick the gate.
 5. Run the deliver stage. You send the output, not the model.
@@ -157,7 +157,7 @@ ticked gate.
 
 ## 7. A fresh session and a colleague read it
 
-Hour 7, the walk test. Source: `03_automate-it-keep-your-judgment/03_keep-it-useful-hand-it-on.md`;
+Hour 7, the walk test. Source: `03_automate-it-keep-your-judgment/03_keep-it-useful-hand-it-on.md`,
 `05_history-and-concepts/04_the-ladder-that-explains-every-ai-failure.md`.
 
 **Goal.** Your workspace passes the walk test, and you know what you do with it next week.
@@ -165,7 +165,7 @@ Hour 7, the walk test. Source: `03_automate-it-keep-your-judgment/03_keep-it-use
 **Steps.**
 
 1. Run the checks in `walk-test.md`, in order.
-2. Fix each check that fails. Run it again.
+2. When a check fails, correct the workspace. Run the check again.
 3. Look at your sorted week from exercise 1 again. Choose the next job for a workspace, and
    one job you leave alone.
 4. Ask: will the next version of my tool give this for free? If yes, make it smaller.
