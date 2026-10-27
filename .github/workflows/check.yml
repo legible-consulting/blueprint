@@ -41,7 +41,7 @@ jobs:
     # The template renders into a scratch folder with copier, as a kickoff would, once per
     # proof answer set: every default, every yes (monorepo, release, uat), release no, and a
     # workspace. A build must carry the ticket convention, the pull request template with both
-    # gate anchors, a CLAUDE.md under 80 lines and no BUILD.md. A uat render carries every UAT
+    # gate anchors, the three skills, a CLAUDE.md under 80 lines and no BUILD.md. A uat render carries every UAT
     # file and the others none. A workspace carries the three stage contracts, each with
     # Inputs, Process, Outputs and status: stub, one gate, and a ci.yml that asks for the
     # contract check, and no build file. A build carries session-start.sh, registered, and it
@@ -137,6 +137,23 @@ jobs:
             || { echo "::error::${NAME}: .claude/hooks/session-start.sh is not executable"; fail=1; }
           jq -e '.hooks.SessionStart[0].hooks[0].command | endswith("/.claude/hooks/session-start.sh\"")' .claude/settings.json >/dev/null \
             || { echo "::error::${NAME}: .claude/settings.json does not register session-start.sh"; fail=1; }
+          # The three skills. asd-ste100 is a copy of the linter's repo at the pinned commit. Each
+          # written skill stays under 120 lines, and its frontmatter name equals its folder.
+          for f in SKILL.md README.md LICENSE references/writing-rules.md scripts/ste-lint.py \
+            examples/before-after.md examples/linter-edge-cases.md; do
+            need ".claude/skills/asd-ste100/${f}"
+          done
+          for s in pr-conventions ticket-craft; do
+            f=".claude/skills/${s}/SKILL.md"
+            need "$f"
+            [ -e "$f" ] || continue
+            n="$(wc -l < "$f")"
+            [ "$n" -lt 120 ] || { echo "::error::${NAME}: ${f} has ${n} lines (limit 120)"; fail=1; }
+            [ "$(head -n 1 "$f")" = '---' ] && sed -n '2,/^---$/p' "$f" | grep -qx "name: ${s}" \
+              || { echo "::error::${NAME}: ${f} frontmatter lacks 'name: ${s}'"; fail=1; }
+            sed -n '2,/^---$/p' "$f" | grep -q '^description: .' \
+              || { echo "::error::${NAME}: ${f} frontmatter lacks a description"; fail=1; }
+          done
           [ ! -e BUILD.md ] || { echo "::error::${NAME}: BUILD.md must not exist"; fail=1; }
           uat_files=".icm/uat/CONTEXT.md .icm/scripts/promote.sh .icm/scripts/uat-db.sh .icm/scripts/rollback.sh .icm/scripts/lib/vercel.sh .icm/scripts/lib/neon.sh .github/workflows/promote.yml .github/workflows/neon-cleanup.yml .env.example"
           for f in $uat_files; do
@@ -192,8 +209,13 @@ jobs:
           for h in block-local-checks confirm-git-writes guard-plaintext-secrets; do
             need ".claude/hooks/${h}.sh"
           done
-          # A workspace has no tickets, no pull request template and no release: no build file.
+          # A workspace has no tickets, no pull request template, no release and no ticket
+          # skills: no build file.
           never .icm
+          # Copier makes the empty .claude/skills folder, and git does not keep an empty folder.
+          # No file under it is the check.
+          [ -z "$(find .claude/skills -type f 2>/dev/null)" ] \
+            || { echo "::error::${NAME}: .claude/skills holds a file"; fail=1; }
           never .github/pull_request_template.md
           never BUILD.md
           never .env.example
@@ -401,7 +423,8 @@ jobs:
 
   writing:
     # Simplified Technical English as advice: findings in the run summary, never a failure.
-    # The same linter commit as the house's check.yml.
+    # The same linter commit as the house's check.yml. The template's copy of the linter's repo
+    # is skipped: its examples hold bad text on purpose, and no file in the copy is edited.
     runs-on: ubuntu-latest
     env:
       STE_SKILL_SHA: 3944283c183eea13fe5bd902b572da3b4de8bf44
@@ -415,6 +438,6 @@ jobs:
           git -C /tmp/ste checkout -q "$STE_SKILL_SHA"
       - name: Lint every markdown file, as advice
         run: |
-          out="$(git ls-files -z '*.md' '*.md.jinja' | xargs -0 python3 -I /tmp/ste/scripts/ste-lint.py 2>&1 || true)"
+          out="$(git ls-files -z '*.md' '*.md.jinja' ':!:template/.claude/skills/*asd-ste100*' | xargs -0 python3 -I /tmp/ste/scripts/ste-lint.py 2>&1 || true)"
           { echo '## Simplified Technical English (advice)'; echo; echo '```'; echo "$out" | tail -n 200; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
           echo "$out" | tail -n 40
