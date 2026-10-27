@@ -20,9 +20,8 @@ matches .env.example. -#}
   },
   "hooks": {
 {%- if not workspace %}
-{#- Two build-only hooks. A workspace never registers them. Each entry stays in this comment
-until its hook file is in .claude/hooks/: a registered hook whose file is absent fails on each
-prompt or session start. To register one, move its entry above this comment.
+{#- Two build-only hooks. A workspace never registers them. The router names the contract for
+each prompt. #}
     "UserPromptSubmit": [
       {
         "hooks": [
@@ -33,6 +32,9 @@ prompt or session start. To register one, move its entry above this comment.
         ]
       }
     ],
+{#- The next entry stays in this comment until its hook file is in .claude/hooks/: a registered
+hook whose file is absent fails on each session start. To register it, move it above this
+comment.
     "SessionStart": [
       {
         "hooks": [

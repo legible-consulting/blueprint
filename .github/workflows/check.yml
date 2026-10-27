@@ -46,7 +46,8 @@ jobs:
     # Inputs, Process, Outputs and status: stub, one gate, and a ci.yml that asks for the
     # contract check, and no build file. actionlint reads the rendered workflows and shellcheck the rendered
     # hooks and scripts, so a template error fails here and not in a client repo. In a build,
-    # new-run.sh --dry-run runs on a fixture stub and must leave the tree as it was.
+    # new-run.sh --dry-run runs on a fixture stub and must leave the tree as it was, and the
+    # router passes its fixture test.
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -131,6 +132,15 @@ jobs:
           for h in block-local-checks confirm-git-writes guard-plaintext-secrets; do
             need ".claude/hooks/${h}.sh"
           done
+          # The router is build-only. Claude Code runs it on each prompt, so settings.json
+          # registers it.
+          for h in route-request route-request.test; do
+            f=".claude/hooks/${h}.sh"
+            need "$f"
+            [ ! -e "$f" ] || [ -x "$f" ] || { echo "::error::${NAME}: ${f} is not executable"; fail=1; }
+          done
+          jq -e '.hooks.UserPromptSubmit[0].hooks[0].command | contains("route-request.sh")' .claude/settings.json >/dev/null \
+            || { echo "::error::${NAME}: settings.json does not register route-request.sh"; fail=1; }
           # The three skills. asd-ste100 is a copy of the linter's repo at the pinned commit. Each
           # written skill stays under 120 lines, and its frontmatter name equals its folder.
           for f in SKILL.md README.md LICENSE references/writing-rules.md scripts/ste-lint.py \
@@ -213,6 +223,10 @@ jobs:
           never .github/pull_request_template.md
           never BUILD.md
           never .env.example
+          never .claude/hooks/route-request.sh
+          never .claude/hooks/route-request.test.sh
+          jq -e '.hooks | has("UserPromptSubmit") | not' .claude/settings.json >/dev/null \
+            || { echo "::error::${NAME}: settings.json registers a UserPromptSubmit hook"; fail=1; }
           for d in 01-collect 02-draft 03-deliver; do
             f="${d}/CONTEXT.md"
             need "$f"
@@ -314,6 +328,12 @@ jobs:
           ! grep -qF 'Spec approved' <<<"$out" || { echo "::error::${NAME}: the triage dry run keeps the Spec approved gate"; fail=1; }
           [ "$(git status --porcelain --untracked-files=all)" = "$st" ] || { echo "::error::${NAME}: the triage dry run changed the working tree"; fail=1; }
           exit "$fail"
+      - name: The router passes its fixture test
+        if: matrix.workspace == 'false'
+        working-directory: ${{ runner.temp }}/zz-${{ matrix.name }}
+        # The test builds its own fixture trees, so the rendered build's .icm/intake/ does not
+        # count. Each hook call must take less than 100 ms.
+        run: bash .claude/hooks/route-request.test.sh
       - name: actionlint on the rendered workflows
         working-directory: ${{ runner.temp }}/zz-${{ matrix.name }}
         # The rendered folder is not a git repo, so the files are named instead of found.
