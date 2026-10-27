@@ -15,13 +15,10 @@ ticket from stub to production.
                                  build, and the dispatch command when a release waits for its promotion
                                  approve --by "<who>": records the client's word on the release pull request
                                  run --tag <tag>: dispatches promote.yml, on Jamie's word
-  uat-db.sh                      status | create | reset --yes | delete --yes: the Neon branch `uat`
-                                 and its connection string on the UAT environment
   rollback.sh                    names the previous production deployment, prints the command, runs nothing
-  lib/vercel.sh, lib/neon.sh     the two transports the scripts and the workflows share
+  lib/vercel.sh                  the Vercel transport the scripts and the workflows share
 .github/workflows/
   promote.yml                    dispatched by promote.sh run with a release tag: migrate production → promote
-  neon-cleanup.yml               a pull request closes → its Neon branch `preview/<branch>` is deleted
 .env.example                     the variables by name, with the environments each one reaches
 ```
 
@@ -29,9 +26,9 @@ ticket from stub to production.
 
 | Environment | Serves | Database | Moves on |
 |---|---|---|---|
-| Preview | one pull request, at its Vercel preview URL | the Neon branch `preview/<git branch>` | every push to the branch |
-| UAT | `main`, at the UAT address: the Vercel custom environment `uat` | the Neon branch `uat` | every merge to `main` |
-| Production | the last promoted release, at the production domain | the production Neon project's default branch | `promote.sh run --tag <tag>`, on Jamie's word |
+| Preview | one pull request, at its Vercel preview URL | the UAT database, or the pull request's own as the database rule says | every push to the branch |
+| UAT | `main`, at the UAT address: the Vercel custom environment `uat` | the UAT database | every merge to `main` |
+| Production | the last promoted release, at the production domain | production's database | `promote.sh run --tag <tag>`, on Jamie's word |
 
 - **`main` is the only long-lived branch.** Every ticket merges into it (why: one branch leaves
   nothing to sync or to bring back · 2026-10-23).
@@ -48,59 +45,20 @@ ticket from stub to production.
 - **The pull request preview is Jamie's.** Jamie tests a ticket there before **Ready to merge**.
   The client is only ever sent to the UAT address (why: a preview is one ticket on its own, and the
   client tests the batch as it will ship · 2026-10-23).
-- **Inside the UAT environment `VERCEL_ENV` is `preview`.** A build that migrates its database on
-  a preview migrates UAT's the same way (why: Vercel types a custom environment as preview, and
-  one build script then covers both · 2026-10-23).
+- **Inside the UAT environment `VERCEL_ENV` is `preview`.** A build decides what to do at build
+  from its own variables, never from `VERCEL_ENV` (why: Vercel types a custom environment as
+  preview, so `VERCEL_ENV` cannot tell UAT from a pull request · 2026-10-23).
 
 ## The database
 
-One Neon project per build, or two. With one, its default branch is production's database and
-two kinds of branch live beside it:
-
-- **`uat`**: the UAT environment's database. A schema-only branch made from the default branch:
-  production's tables, none of production's rows. `uat-db.sh` makes it, resets it and deletes
-  it. Nothing else writes it (why: a client's test environment must never hold a copy of
-  production's personal data, and a schema-only branch gives the shape without the rows ·
-  2026-10-23).
-- **`preview/<git branch>`**: one per pull request, made and wired by the Vercel Neon
-  integration, deleted by `neon-cleanup.yml` when the pull request closes (why: the integration
-  deletes a branch only when the deployment expires, which Vercel can put months away, and a
-  Neon project's plan caps its branches · 2026-10-23).
-
-With two, the build keeps its UAT database in a second Neon project, as the builds that predate
-this contract do. `NEON_PROJECT_ID` names that second project. Its default branch is the UAT
-database, the `preview/<git branch>` branches are cut from it, and `uat-db.sh` is not used: a
-reset of the UAT database is Jamie's hand in the Neon console. The production project is reached
-by `promote.yml` alone, through the secret `DATABASE_URL` (why: a second project is a wall that
-no script crosses with the wrong id, and the client's test data stays where it is · 2026-10-23).
-
-Rules:
-
-- **With one project, the Neon integration is connected to Production and Preview only, never
-  to the `uat` environment.** `uat-db.sh create` sets `DATABASE_URL` and `DATABASE_URL_UNPOOLED`
-  on the custom environment itself (why: a custom environment that the integration serves
-  receives the Preview value, which is production's connection string · 2026-10-23). With two,
-  Production is served from the production project, and Preview and `uat` from the second: its
-  default branch for `main`, so for the UAT environment, and a `preview/<git branch>` branch
-  for every other branch.
-- **The UAT database is migrated at build.** The build's `vercel-build` script runs `db:migrate`,
-  then `db:verify`, then the build when `VERCEL_ENV` is `preview`. It only builds when
-  `VERCEL_ENV` is `production`. `package.json` names the two scripts `db:migrate` and
-  `db:verify` (why: one script brings UAT and every preview to the commit it serves, and
-  production's migration is the promotion's, so two migrations never run against one database
-  · 2026-10-23).
-- **Nothing in this repo writes the default branch.** `uat-db.sh` refuses it by id and by name.
-  Production's migration runs in `promote.yml` alone (why: the one write to production is the
-  promotion, on Jamie's word · 2026-10-27).
-- **A reset is a delete and a create.** A schema-only branch has no parent to reset from.
-  `uat-db.sh reset --yes` deletes `uat`, creates it again from the default branch's current
-  schema, and sets the new connection string on the environment. The client's test data is gone.
-  Run it when the client asks for a clean slate, or when a promotion changed the schema in a way
-  the test data cannot follow. Never on a schedule (why: the client's test data is theirs to
-  keep until they say otherwise · 2026-10-23).
-- **A create or a reset is followed by a redeploy of the UAT environment.** The script says so.
-  The variables apply to the next build (why: a Vercel variable reaches a deployment at build
-  time · 2026-10-23).
+The UAT environment reads a UAT database, never production's. With `database: neon` in
+`.copier-answers.yml`, the UAT database is the default branch of a second Neon project, the
+base, and `.icm/database/CONTEXT.md` holds the rest: the base, the preview branches, the
+migration at build, the setup and the names. With any other answer, the database is the
+build's own, the build provides the UAT database, and this contract says nothing more about it.
+Production's migration is the promotion's, below (why: the client's test data stays apart from
+production's rows, and the one write to production is the promotion, on Jamie's word ·
+2026-10-27).
 
 ## The batch and the sign-off
 
@@ -138,7 +96,8 @@ the one before it.
 1. **The release.** The tag is a `v*` tag in the repository and points at a commit on `main`.
    Anything else stops the run before it touches production.
 2. **The migration.** `db:migrate`, then `db:verify`, against production's connection string,
-   the repository secret `DATABASE_URL`. A failed migration stops the promotion, and production
+   the repository secret `DATABASE_URL`. A build whose `package.json` names no `db:migrate`
+   skips this job's steps. A failed migration stops the promotion, and production
    serves the previous release unchanged (why: a schema that moved with no code behind it is one
    migration to repair, and code that moved with no schema behind it is an outage · 2026-10-23).
 3. **The promotion.** The production deployment of that commit, built when the merge pushed, is
@@ -190,19 +149,15 @@ status` marks the ones it can read.
    branch tracking `main`. Attach the domain `uat.<the production domain>` to it and add the
    CNAME at the registrar. A custom environment needs a Pro team.
 2. Vercel → Settings → Environments → Production: "Auto-assign Custom Production Domains" off.
-3. Vercel → Storage: the Neon integration connected to Production and Preview, with preview
-   branching on, and not connected to `uat`. With two Neon projects: Production from the
-   production project, Preview and `uat` from the second.
+3. The database: with `database: neon`, `.icm/database/CONTEXT.md` § Setup, once. With any
+   other answer, the build's own setup, with a UAT database apart from production's.
 4. GitHub → the repository → Settings → Secrets and variables → Actions. Secrets:
-   `VERCEL_TOKEN`, `NEON_API_KEY`, `DATABASE_URL` (production's direct connection string, read by
-   the migration in `promote.yml` only). Variables: `VERCEL_TEAM`, `NEON_PROJECT_ID`, and
-   `VERCEL_PROJECT` when the Vercel project's name differs from the repository's.
-5. With one Neon project, in a shell with the same names exported: `.icm/scripts/uat-db.sh
-   create`, then redeploy the UAT environment. With two, nothing: step 3 set the UAT
-   environment's connection string.
-6. The application's own variables on the `uat` environment, from `.env.example`: sandbox keys, never
+   `VERCEL_TOKEN`, and `DATABASE_URL` (production's direct connection string, read by the
+   migration in `promote.yml` only) when `package.json` names `db:migrate`. Variables:
+   `VERCEL_TEAM`, and `VERCEL_PROJECT` when the Vercel project's name differs from the
+   repository's.
+5. The application's own variables on the `uat` environment, from `.env.example`: sandbox keys, never
    live ones.
-7. `package.json`: `db:migrate`, `db:verify`, and `vercel-build` as the database rule says.
 
 The names, in one place:
 
@@ -212,9 +167,6 @@ The names, in one place:
 | `VERCEL_TEAM` | the Vercel team's slug | Actions variable · the shell |
 | `VERCEL_PROJECT` | the Vercel project's name, or the repository's name when unset | Actions variable · the shell |
 | `UAT_ENVIRONMENT` | the custom environment's slug, or `uat` when unset | the shell |
-| `NEON_API_KEY` | a Neon API key for the organisation | Actions secret · the shell |
-| `NEON_PROJECT_ID` | the Neon project's id, the second project's with two (an identifier, not a secret) | Actions variable · the shell |
-| `UAT_DB_BRANCH` | the UAT branch's name, or `uat` when unset | the shell |
-| `DATABASE_URL` | production's direct connection string in Actions, and each environment's own on Vercel | Actions secret · Vercel |
+| `DATABASE_URL` | production's direct connection string, for the migration in `promote.yml` | Actions secret |
 
 Values never enter git. `.env.example` lists the names the application reads.

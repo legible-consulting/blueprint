@@ -6,16 +6,17 @@ _subdirectory: template
 _answers_file: .copier-answers.yml
 # A rendered repo owns its README.md, its .icm/intake/README.md (what is true of this backlog:
 # the epics, the decisions of record), its CLAUDE.md and its .gitignore: the routing table and
-# the ignore list grow with the code. A UAT build's .env.example is the build's own list of
-# names and grows the same way. Copier writes each once and never overwrites it. Every other
-# rendered file is the blueprint's: the ticket contract (.icm/intake/CONTEXT.md), the UAT
-# contract, the pull request template, the guards, the scripts, the workflows.
+# the ignore list grow with the code. A UAT or Neon build's .env.example is the build's own
+# list of names and grows the same way. Copier writes each once and never overwrites it. Every
+# other rendered file is the blueprint's: the ticket contract (.icm/intake/CONTEXT.md), the UAT
+# contract, the database contract, the pull request template, the guards, the scripts, the
+# workflows.
 _skip_if_exists:
   - README.md
   - .icm/intake/README.md
   - CLAUDE.md
   - .gitignore
-  - "{% if uat %}.env.example{% endif %}"
+  - "{% if uat or database == 'neon' %}.env.example{% endif %}"
   # A workspace's stage contracts are the client's from the first coaching hour.
   - "{% if workspace %}01-collect{% endif %}/CONTEXT.md"
   - "{% if workspace %}02-draft{% endif %}/CONTEXT.md"
@@ -66,11 +67,37 @@ uat:
   type: bool
   help: >-
     Does the client sign each batch off on a UAT environment before it reaches production?
-    Yes renders .icm/uat/CONTEXT.md, the scripts promote.sh, uat-db.sh and rollback.sh, the
-    workflows promote.yml and neon-cleanup.yml, and .env.example: a Vercel custom environment
-    `uat` deployed from main on every merge, a UAT database (a Neon branch `uat`, or a second
-    Neon project), and a promotion that Jamie dispatches with the release tag after the client's
-    sign-off. No means the pull request preview is the UAT and production follows main. Asked
-    when release is yes.
+    Yes renders .icm/uat/CONTEXT.md, the scripts promote.sh and rollback.sh, the workflow
+    promote.yml, and .env.example: a Vercel custom environment `uat` deployed from main on every
+    merge, a UAT database that is the build's own (database decides its files), and a promotion
+    that promote.sh run dispatches with the release tag after the client's sign-off. No means the
+    pull request preview is the UAT and production follows main. Asked when release is yes.
   default: false
   when: "{{ release and not workspace }}"
+
+database:
+  type: str
+  help: >-
+    The database the build runs on. neon renders the database contract
+    (.icm/database/CONTEXT.md), the preview-branch script preview-db.sh, and the workflows
+    preview-db.yml and neon-cleanup.yml. Any other answer renders no database file, and the
+    answer stays in .copier-answers.yml so the blueprint can learn what those builds need.
+  choices:
+    - none
+    - neon
+    - mongodb
+    - other
+  default: none
+  when: "{{ not workspace }}"
+
+migrations_path:
+  type: str
+  help: >-
+    The folder the migration files live in, relative to the repo root, for example migrations
+    or drizzle. A pull request that changes a file in it gets its own Neon branch.
+  default: migrations
+  when: "{{ not workspace and database == 'neon' }}"
+  validator: >-
+    {% if not migrations_path | regex_search('^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$')
+    or migrations_path | regex_search('(^|/)\\.\\.(/|$)') %}a relative folder: no leading or
+    trailing /, no .. segment, only A-Z a-z 0-9 . _ - /{% endif %}

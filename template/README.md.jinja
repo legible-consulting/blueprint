@@ -12,9 +12,23 @@ Built by Legible Consulting. Tickets: `.icm/intake/`. Conventions: `CLAUDE.md`.
 
 | Environment | Address | Database | Moves on |
 |---|---|---|---|
-| Production | <the production domain> | the production Neon project's default branch | Jamie's dispatch of `promote.yml` with the release tag |
-| UAT | <https://uat.the production domain> | the Neon branch `uat`, or the second Neon project's default branch | every merge to `main` |
-| Preview | the pull request's Vercel preview | the Neon branch `preview/<branch>` | every push to the branch |
+{%- if database == 'neon' %}
+| Production | <the production domain> | the production Neon project's default branch | `promote.sh run --tag <tag>`, on Jamie's word |
+| UAT | <https://uat.the production domain> | the UAT Neon project's default branch, the base | every merge to `main` |
+| Preview | the pull request's Vercel preview | the base, or the Neon branch `preview/<branch>` when the pull request changes a migration | every push to the branch |
+{%- else %}
+| Production | <the production domain> | production's database | `promote.sh run --tag <tag>`, on Jamie's word |
+| UAT | <https://uat.the production domain> | the UAT database, apart from production's | every merge to `main` |
+| Preview | the pull request's Vercel preview | <the database a preview reads> | every push to the branch |
+{%- endif %}
 
 The contract: `.icm/uat/CONTEXT.md`.
+{%- endif %}
+{%- if database == 'neon' and not uat %}
+
+## Database
+
+One Neon project. Its default branch is production's database and the base: every preview
+reads it. A pull request that changes a migration gets the Neon branch `preview/<branch>`. The
+contract: `.icm/database/CONTEXT.md`.
 {%- endif %}

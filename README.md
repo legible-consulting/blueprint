@@ -3,7 +3,8 @@
 Legible Consulting's method, public: one copier template that renders a client build, or a
 client's ICM workspace, from its answers, the conventions every rendered repo follows, and the
 workshop kit. The questions are the bank in `copier.yml`: the slug, the client's name, the
-language, `workspace`, then for a build `monorepo`, `release` and `uat`.
+language, `workspace`, then for a build `monorepo`, `release`, `uat`, `database` and
+`migrations_path`.
 
 ```bash
 copier copy gh:legible-consulting/blueprint ~/Desktop/legible-consulting/projects/<slug>
@@ -21,8 +22,8 @@ The blueprint is MIT licensed: see `LICENSE`.
 | `conventions/` | what a rendered repo must keep: `CLAUDE.md` shape, tickets, pull requests and gates, commits, writing, CI, guards, secrets, UAT |
 | `workshop-kit/` | the one-day workshop: the slides (Marp), the exercises and the walk test |
 
-`check.yml` renders four proof answer sets on each push (the defaults, every yes, `release` no,
-and a workspace), lints the rendered workflows, hooks and scripts, and checks that every functionality
+`check.yml` renders six proof answer sets on each push (the defaults, every yes with `neon`,
+`release` no, a workspace, `neon` without UAT, and `mongodb` with UAT), lints the rendered workflows, hooks and scripts, and checks that every functionality
 question has a default and a help line.
 
 ## The template
@@ -35,10 +36,12 @@ three guards, the settings that register them, and the three skills below).
 
 | Question | Yes renders or changes |
 |---|---|
-| `workspace` | a client's ICM workspace instead of a build: see The workspace below. `monorepo`, `release` and `uat` are asked only on no |
+| `workspace` | a client's ICM workspace instead of a build: see The workspace below. `monorepo`, `release`, `uat` and `database` are asked only on no |
 | `monorepo` | `.gitignore` gains the monorepo caches. `CLAUDE.md` gains an Apps and packages table and says previews, plural |
 | `release` | `ci.yml` gains the `release` job: `.github`'s `release.yml` (release-please) on each push to `main`. `CLAUDE.md` says the release is Jamie's merge of the release pull request. No: production follows `main`, and the merge is the release |
 | `uat` (asked when `release` is yes) | the UAT shape below |
+| `database` (`none`, `neon`, `mongodb`, `other`) | `neon` renders the database shape below. Any other answer renders no database file, and `.copier-answers.yml` keeps the answer |
+| `migrations_path` (asked on `neon`, default `migrations`) | the folder `preview-db.yml` watches |
 
 ### Written once
 
@@ -76,18 +79,32 @@ licence is MIT, and the copy keeps its `LICENSE`. No file in the copy is edited.
 |---|---|
 | `.icm/uat/CONTEXT.md` | the whole UAT contract: the three environments, the database, the batch, the sign-off, the promotion, the rollback, the setup acts and the names |
 | `.icm/scripts/promote.sh` | `status` reads the batch, the release pull request, `ci`, the UAT deployment, the staged production build, and prints the dispatch command when a release waits. `approve --by "<who>"` records the client's word on the release pull request |
-| `.icm/scripts/uat-db.sh` | with one Neon project: `status`, `create`, `reset --yes`, `delete --yes`: the Neon branch `uat` (schema only, no rows) and its connection string on the Vercel custom environment. A build with a second Neon project for UAT does not use it |
 | `.icm/scripts/rollback.sh` | names the previous production deployment and prints the rollback command. Runs nothing |
-| `.icm/scripts/lib/vercel.sh`, `lib/neon.sh` | the two transports. A token never reaches a command line |
+| `.icm/scripts/lib/vercel.sh` | the Vercel transport, also on `neon`. A token never reaches a command line |
 | `.github/workflows/promote.yml` | on Jamie's dispatch with a release tag: migrate production → promote the staged build → read production once. No push, merge or tag starts it |
-| `.github/workflows/neon-cleanup.yml` | a pull request closes → its `preview/<branch>` Neon branch is deleted |
-| `.env.example` | the names, with the environments each one reaches. Written once |
+| `.env.example` | the names, with the environments each one reaches. Written once. Also on `neon` |
 
 The shape in four sentences. Every merge to `main` deploys the Vercel custom environment `uat`
 and builds a staged production deployment. The client tests the batch at the UAT address. Jamie
 records the sign-off, merges the release pull request, and dispatches `promote.yml` with its tag.
 That run migrates production and promotes the staged build. No means the pull request preview is
 the UAT and production follows `main`.
+
+### The database
+
+A build that answered `neon` carries the database shape. Any other answer renders none of it.
+
+| File | Does |
+|---|---|
+| `.icm/database/CONTEXT.md` | the database contract: the base, a preview branch for a migration, the migration at build, the setup acts and the names |
+| `.icm/scripts/preview-db.sh` | `create`, `delete`, `status` of `preview/<git branch>` and its three Preview variables, scoped to the git branch |
+| `.icm/scripts/lib/neon.sh` | the Neon transport. A token never reaches a command line. The base is never written |
+| `.github/workflows/preview-db.yml` | a pull request changes `<migrations_path>/**` → `preview-db.sh create` |
+| `.github/workflows/neon-cleanup.yml` | a pull request closes → `preview-db.sh delete` |
+
+The shape in four sentences. The base is UAT's database with UAT, production's without. Every
+preview reads the base. A pull request that changes a migration gets a Neon branch cut from the
+base, with its data. A deployment migrates at build only where `MIGRATE_AT_BUILD` is `1`.
 
 ### The workspace
 
