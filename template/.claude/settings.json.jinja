@@ -20,7 +20,17 @@ matches .env.example. -#}
   },
   "hooks": {
 {%- if not workspace %}
-{#- Two build-only hooks. A workspace never registers them. Each entry stays in this comment
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/session-start.sh\""
+          }
+        ]
+      }
+    ],
+{#- The build-only hooks. A workspace never registers them. An entry stays in this comment
 until its hook file is in .claude/hooks/: a registered hook whose file is absent fails on each
 prompt or session start. To register one, move its entry above this comment.
     "UserPromptSubmit": [
@@ -29,16 +39,6 @@ prompt or session start. To register one, move its entry above this comment.
           {
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/route-request.sh\""
-          }
-        ]
-      }
-    ],
-    "SessionStart": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/session-start.sh\""
           }
         ]
       }

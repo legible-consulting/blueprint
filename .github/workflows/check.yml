@@ -44,7 +44,8 @@ jobs:
     # gate anchors, a CLAUDE.md under 80 lines and no BUILD.md. A uat render carries every UAT
     # file and the others none. A workspace carries the three stage contracts, each with
     # Inputs, Process, Outputs and status: stub, one gate, and a ci.yml that asks for the
-    # contract check, and no build file. actionlint reads the rendered workflows and shellcheck the rendered
+    # contract check, and no build file. A build carries session-start.sh, registered, and it
+    # prints the board of a fixture. A workspace carries neither. actionlint reads the rendered workflows and shellcheck the rendered
     # hooks and scripts, so a template error fails here and not in a client repo. In a build,
     # new-run.sh --dry-run runs on a fixture stub and must leave the tree as it was.
     runs-on: ubuntu-latest
@@ -131,6 +132,11 @@ jobs:
           for h in block-local-checks confirm-git-writes guard-plaintext-secrets; do
             need ".claude/hooks/${h}.sh"
           done
+          need .claude/hooks/session-start.sh
+          [ ! -e .claude/hooks/session-start.sh ] || [ -x .claude/hooks/session-start.sh ] \
+            || { echo "::error::${NAME}: .claude/hooks/session-start.sh is not executable"; fail=1; }
+          jq -e '.hooks.SessionStart[0].hooks[0].command | endswith("/.claude/hooks/session-start.sh\"")' .claude/settings.json >/dev/null \
+            || { echo "::error::${NAME}: .claude/settings.json does not register session-start.sh"; fail=1; }
           [ ! -e BUILD.md ] || { echo "::error::${NAME}: BUILD.md must not exist"; fail=1; }
           uat_files=".icm/uat/CONTEXT.md .icm/scripts/promote.sh .icm/scripts/uat-db.sh .icm/scripts/rollback.sh .icm/scripts/lib/vercel.sh .icm/scripts/lib/neon.sh .github/workflows/promote.yml .github/workflows/neon-cleanup.yml .env.example"
           for f in $uat_files; do
@@ -191,6 +197,9 @@ jobs:
           never .github/pull_request_template.md
           never BUILD.md
           never .env.example
+          never .claude/hooks/session-start.sh
+          ! jq -e '.hooks | has("SessionStart")' .claude/settings.json >/dev/null \
+            || { echo "::error::${NAME}: .claude/settings.json registers SessionStart"; fail=1; }
           for d in 01-collect 02-draft 03-deliver; do
             f="${d}/CONTEXT.md"
             need "$f"
@@ -209,6 +218,72 @@ jobs:
           [ "$lines" -lt 80 ] || { echo "::error::${NAME}: CLAUDE.md has ${lines} lines (limit 80)"; fail=1; }
           ! grep -rqE '(^|[^$])\{\{|\{%' CLAUDE.md README.md .gitignore .github ./*/CONTEXT.md \
             || { echo "::error::${NAME}: an unrendered Jinja tag remains"; fail=1; }
+          exit "$fail"
+      - name: session-start.sh prints the board of a fixture
+        if: matrix.workspace == 'false'
+        working-directory: ${{ runner.temp }}/zz-${{ matrix.name }}
+        # A copy of the render gets two epics, one triage stub, an Order and two branches. The
+        # hook must print the expected lines, keep the checked-out ticket started, and stay
+        # quiet on stderr with no README.md, no .git or no open stub.
+        run: |
+          fail=0
+          b="${RUNNER_TEMP}/board-${NAME}"
+          cp -a . "$b"
+          cd "$b"
+          i=.icm/intake
+          mkdir -p "$i/zz-alpha" "$i/zz-beta/_done"
+          printf '# Breakdown: Zz alpha\n' > "$i/zz-alpha/breakdown.md"
+          printf '# Stub: A1\n\n- feature-slug: a1\n- sequence: 2 of 3\n' > "$i/zz-alpha/a1.md"
+          printf '# Stub: A2\n\n- feature-slug: a2\n- sequence: 1 of 3\n- blocked: waits on a vendor\n' > "$i/zz-alpha/a2.md"
+          printf '# Stub: A3\n\n- feature-slug: a3\n' > "$i/zz-alpha/a3.md"
+          printf '# Stub: B1\n\n- feature-slug: b1\n- sequence: 2 of 2\n' > "$i/zz-beta/b1.md"
+          printf '# Stub: B0\n\n- feature-slug: b0\n- sequence: 1 of 2\n' > "$i/zz-beta/_done/b0.md"
+          printf '# Stub: Zz fix\n\n- lane: bug\n- priority: P1\n' > "$i/triage/zz-fix.md"
+          printf '\n## Order\n\nSet by Jamie on 2026-10-27.\n\n1. triage\n2. zz-alpha\n3. zz-beta\n' >> "$i/README.md"
+          git init -q -b main
+          git config user.name check
+          git config user.email check@example.invalid
+          git add -A
+          git commit -q -m fixture
+          # a1 is started. b0 merged and its branch stays: it is not started.
+          git branch a1
+          git branch b0
+          want="$(cat <<'EOF'
+          The board of .icm/intake/ (read-only):
+            epic zz-alpha: 3 open, next: a1
+            epic zz-beta: 1 open, next: b1
+            triage: 1 open (bug 1)
+          ## Order
+          Set by Jamie on 2026-10-27.
+          1. triage
+          2. zz-alpha
+          3. zz-beta
+          Started tickets:
+            zz-alpha/a1 on branch a1
+          5 open stubs in total. Planning lives in .icm/intake/, never in a loose TODO.md.
+          EOF
+          )"
+          got="$(CLAUDE_PROJECT_DIR="$b" bash .claude/hooks/session-start.sh 2>"${b}.err")" \
+            || { echo "::error::${NAME}: session-start.sh exits non-zero"; fail=1; }
+          [ "$got" = "$want" ] || { echo "::error::${NAME}: session-start.sh prints other lines"; diff <(echo "$want") <(echo "$got"); fail=1; }
+          # On the ticket's branch the stub is in _done/, and the ticket stays started.
+          git switch -q a1
+          mkdir -p "$i/zz-alpha/_done"
+          git mv "$i/zz-alpha/a1.md" "$i/zz-alpha/_done/a1.md"
+          got="$(CLAUDE_PROJECT_DIR="$b" bash .claude/hooks/session-start.sh 2>>"${b}.err")"
+          grep -qxF '  zz-alpha/a1 on branch a1' <<<"$got" || { echo "::error::${NAME}: the checked-out ticket is not started"; fail=1; }
+          grep -qxF '  epic zz-alpha: 2 open, next: a3' <<<"$got" || { echo "::error::${NAME}: the next stub on the branch is wrong"; fail=1; }
+          # No README.md and no .git: the board still prints, with no error.
+          rm -rf .git "$i/README.md"
+          got="$(CLAUDE_PROJECT_DIR="$b" bash .claude/hooks/session-start.sh 2>>"${b}.err")" \
+            || { echo "::error::${NAME}: session-start.sh fails with no .git"; fail=1; }
+          ! grep -qF 'Started' <<<"$got" || { echo "::error::${NAME}: a ticket is started with no .git"; fail=1; }
+          ! grep -qxF '## Order' <<<"$got" || { echo "::error::${NAME}: an Order prints with no README.md"; fail=1; }
+          # No open stub: silent.
+          rm -rf "$i/zz-alpha" "$i/zz-beta" "$i/triage/zz-fix.md"
+          [ -z "$(CLAUDE_PROJECT_DIR="$b" bash .claude/hooks/session-start.sh 2>>"${b}.err")" ] \
+            || { echo "::error::${NAME}: session-start.sh prints with no open stub"; fail=1; }
+          [ ! -s "${b}.err" ] || { echo "::error::${NAME}: session-start.sh writes to stderr"; cat "${b}.err"; fail=1; }
           exit "$fail"
       - name: new-run.sh --dry-run changes nothing
         if: matrix.workspace == 'false'
