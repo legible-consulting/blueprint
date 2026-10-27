@@ -8,4 +8,6 @@ copied as is, and a file or folder whose name carries a question renders only on
 questions are the bank in `copier.yml`: every functionality question has a default and a help
 line. Test a change by rendering into a scratch folder with `copier copy --vcs-ref HEAD .
 /tmp/zz`, never by editing a client repo by hand. `check.yml` renders the proof answer sets on
-each pull request and on push to `main`. Technical text in Simplified Technical English.
+each pull request and on push to `main`. It lints the rendered workflows, hooks and scripts,
+runs the router's fixture test in each build, and proves `copier update` from an older tag to
+`HEAD`. Technical text in Simplified Technical English.
