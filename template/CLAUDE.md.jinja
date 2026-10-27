@@ -70,7 +70,10 @@ build's own rows go below.
 {%- endif %}
 | change a file the blueprint renders | the blueprint, then `copier update` here |
 {%- if uat %}
-| read the UAT batch, record the client's sign-off, promote, reset the UAT database, roll back | `.icm/uat/CONTEXT.md` (the whole UAT contract), then its scripts |
+| read the UAT batch, record the client's sign-off, promote, roll back | `.icm/uat/CONTEXT.md` (the whole UAT contract), then its scripts |
+{%- endif %}
+{%- if database == 'neon' %}
+| write a migration, read a preview's database, set up the base | `.icm/database/CONTEXT.md`, then `preview-db.sh` |
 {%- endif %}
 
 ## Rules
