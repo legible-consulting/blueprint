@@ -23,22 +23,33 @@ The blueprint is MIT licensed: see `LICENSE`.
 | `workshop-kit/` | the one-day workshop: the slides (Marp), the exercises and the walk test |
 
 `check.yml` renders six proof answer sets on each push (the defaults, every yes with `neon`,
-`release` no, a workspace, `neon` without UAT, and `mongodb` with UAT), lints the rendered workflows, hooks and scripts, and checks that every functionality
-question has a default and a help line.
+`release` no, a workspace, `neon` without UAT, and `mongodb` with UAT). It lints the rendered
+workflows, hooks and scripts. In each build it runs the router's fixture test, the board's
+fixture and a dry run of `new-run.sh`. It proves `copier update` from an older tag to `HEAD`.
+It checks that every functionality question has a default and a help line.
 
 ## The template
 
-Every build carries `CLAUDE.md`, `README.md`, `.gitignore`, `.copier-answers.yml`, the ticket
-convention (`.icm/intake/` with `CONTEXT.md`, `README.md` and the empty `_done/` folders),
-`.icm/scripts/new-run.sh` and `close-out.sh`, `.github/pull_request_template.md` (the gates at
-the top), `.github/workflows/ci.yml` calling `.github`'s `check-client`, and `.claude/` (the
-three guards, the settings that register them, and the three skills below).
+Every build carries these files, whatever its answers:
+
+| File | Is |
+|---|---|
+| `CLAUDE.md`, `README.md`, `.gitignore` | the routing table and the rules, the build's own page, the ignore list. Written once |
+| `.copier-answers.yml` | the answers and the blueprint tag |
+| `.icm/intake/` | the ticket convention: `CONTEXT.md` (the contract and the loop), `README.md`, the empty `_done/` folders |
+| `.icm/lanes/<lane>/CONTEXT.md` | the four lanes for a one-off: `bug`, `tweak`, `chore`, `hotfix` |
+| `.icm/scripts/` | `new-run.sh` (with `--ready` and `--dry-run`), `close-out.sh`, `merge.sh`, `release.sh` |
+| `.github/pull_request_template.md` | the pull request body, the two gates at the top |
+| `.github/workflows/ci.yml` | calls `.github`'s `check-client` |
+| `.claude/settings.json` | the deny list, and the registration of the hooks |
+| `.claude/hooks/` | the three guards, the router `route-request.sh` and its test, the board `session-start.sh` |
+| `.claude/skills/` | the three skills below |
 
 | Question | Yes renders or changes |
 |---|---|
 | `workspace` | a client's ICM workspace instead of a build: see The workspace below. `monorepo`, `release`, `uat` and `database` are asked only on no |
 | `monorepo` | `.gitignore` gains the monorepo caches. `CLAUDE.md` gains an Apps and packages table and says previews, plural |
-| `release` | `ci.yml` gains the `release` job: `.github`'s `release.yml` (release-please) on each push to `main`. `CLAUDE.md` says the release is Jamie's merge of the release pull request. No: production follows `main`, and the merge is the release |
+| `release` | `ci.yml` gains the `release` job: `.github`'s `release.yml` (release-please) on each push to `main`. `CLAUDE.md` says the release is Jamie's word `release`, and the session runs `release.sh`. No: production follows `main`, and the merge is the release |
 | `uat` (asked when `release` is yes) | the UAT shape below |
 | `database` (`none`, `neon`, `mongodb`, `other`) | `neon` renders the database shape below. Any other answer renders no database file, and `.copier-answers.yml` keeps the answer |
 | `migrations_path` (asked on `neon`, default `migrations`) | the folder `preview-db.yml` watches |
@@ -78,16 +89,17 @@ licence is MIT, and the copy keeps its `LICENSE`. No file in the copy is edited.
 | File | Does |
 |---|---|
 | `.icm/uat/CONTEXT.md` | the whole UAT contract: the three environments, the database, the batch, the sign-off, the promotion, the rollback, the setup acts and the names |
-| `.icm/scripts/promote.sh` | `status` reads the batch, the release pull request, `ci`, the UAT deployment, the staged production build, and prints the dispatch command when a release waits. `approve --by "<who>"` records the client's word on the release pull request |
+| `.icm/scripts/promote.sh` | `status` reads the batch, the release pull request, `ci`, the UAT deployment, the staged production build, and prints the dispatch command when a release waits. `approve --by "<who>"` records the client's word on the release pull request. `run --tag <tag>` dispatches `promote.yml`, on Jamie's word |
 | `.icm/scripts/rollback.sh` | names the previous production deployment and prints the rollback command. Runs nothing |
 | `.icm/scripts/lib/vercel.sh` | the Vercel transport, also on `neon`. A token never reaches a command line |
-| `.github/workflows/promote.yml` | on Jamie's dispatch with a release tag: migrate production → promote the staged build → read production once. No push, merge or tag starts it |
+| `.github/workflows/promote.yml` | dispatched by `promote.sh run` with a release tag: migrate production → promote the staged build → read production once. No push, merge or tag starts it |
 | `.env.example` | the names, with the environments each one reaches. Written once. Also on `neon` |
 
 The shape in four sentences. Every merge to `main` deploys the Vercel custom environment `uat`
-and builds a staged production deployment. The client tests the batch at the UAT address. Jamie
-records the sign-off, merges the release pull request, and dispatches `promote.yml` with its tag.
-That run migrates production and promotes the staged build. No means the pull request preview is
+and builds a staged production deployment. The client tests the batch at the UAT address. On
+Jamie's word, the session records the sign-off, merges the release pull request with
+`release.sh`, and runs `promote.sh run` with its tag. That run migrates production and promotes
+the staged build. No means the pull request preview is
 the UAT and production follows `main`.
 
 ### The database

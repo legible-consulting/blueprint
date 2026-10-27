@@ -58,8 +58,9 @@ release:
   type: bool
   help: >-
     Does release-please cut the releases? Yes adds the release job to ci.yml: each push to main
-    opens or updates the release pull request, and Jamie's merge of that pull request is the
-    release. No means production follows main and the merge of a ticket is its release.
+    opens or updates the release pull request. On Jamie's word release, the session merges it
+    with release.sh, and that merge is the release. No means production follows main and the
+    merge of a ticket is its release.
   default: true
   when: "{{ not workspace }}"
 
