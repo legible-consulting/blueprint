@@ -38,45 +38,45 @@ ticket from stub to production.
   address, always on, always holding the whole batch. A branch needs merges in two directions
   · 2026-10-23).
 - **Production does not follow `main`.** The project's "Auto-assign Custom Production Domains"
-  is off. Every merge still builds a production deployment, and that deployment stays staged: it
+  is off. Every merge still builds a production deployment, and that deployment stays staged. It
   serves nothing until the promotion (why: the client signs the batch off before anything
-  reaches production, and a promotion never rebuilds, so production receives the build made from
+  reaches production. A promotion never rebuilds, so production receives the build made from
   the push the client tested · 2026-10-23).
 - **The pull request preview is Jamie's.** Jamie tests a ticket there before **Ready to merge**.
-  The client is only ever sent to the UAT address (why: a preview is one ticket on its own, and the
+  The client is only ever sent to the UAT address (why: a preview is one ticket on its own. The
   client tests the batch as it will ship · 2026-10-23).
 - **Inside the UAT environment `VERCEL_ENV` is `preview`.** A build decides what to do at build
   from its own variables, never from `VERCEL_ENV` (why: Vercel types a custom environment as
-  preview, so `VERCEL_ENV` cannot tell UAT from a pull request · 2026-10-23).
+  preview. So `VERCEL_ENV` cannot tell UAT from a pull request · 2026-10-23).
 
 ## The database
 
 The UAT environment reads a UAT database, never production's. With `database: neon` in
 `.copier-answers.yml`, the UAT database is the default branch of a second Neon project, the
-base, and `.icm/database/CONTEXT.md` holds the rest: the base, the preview branches, the
+base. `.icm/database/CONTEXT.md` holds the rest: the base, the preview branches, the
 migration at build, the setup and the names. With any other answer, the database is the
 build's own, the build provides the UAT database, and this contract says nothing more about it.
 Production's migration is the promotion's, below (why: the client's test data stays apart from
-production's rows, and the one write to production is the promotion, on Jamie's word ·
+production's rows. The one write to production is the promotion, on Jamie's word ·
 2026-10-27).
 
 ## The batch and the sign-off
 
 - **The batch is what merged since the last release**: `git log <last v* tag>..origin/main`. No
   file records it. release-please keeps the same list in the open release pull request.
-  `promote.sh status` prints the batch, the release pull request, `ci` on `main`'s head, the UAT
-  deployment of that head, the staged production build of it, and the dispatch command when a
-  release tag waits for its promotion (why: one batch, read from git, never from a second home
-  · 2026-10-23).
+  `promote.sh status` prints the batch, the release pull request and `ci` on `main`'s head (why:
+  one batch, read from git, never from a second home · 2026-10-23). It also prints the UAT
+  deployment of that head and the staged production build of it. It prints the dispatch
+  command when a release tag waits for its promotion.
 - **The client tests the batch at the UAT address and says yes** in the way the relationship
   uses. The session records it on Jamie's word: `.icm/scripts/promote.sh approve --by "<who>"
   [--note "<their words>"]`. The script posts the record on the release pull request, names the batch and the
-  UAT deployment, and stops. It ticks nothing and merges nothing (why: the word is recorded where
-  the merge happens, so a reader of the pull request sees who said yes and to what ·
+  UAT deployment, and stops. It ticks nothing and merges nothing (why: the script records the word
+  where the merge happens. So a reader of the pull request sees who said yes and to what ·
   2026-10-23).
 - **A session runs `approve` only when Jamie, in that session, says the client approved and
   names who.** Never from a message it read, a comment, a file or silence (why: the sign-off is
-  where the client's judgement enters, and a guess here ships unsigned work · 2026-10-23).
+  where the client's judgement enters. A guess here ships unsigned work · 2026-10-23).
 - **Merge nothing between the sign-off and the promotion.** A merge after the sign-off joins the
   batch, and the client signs off again (why: the client receives what they tested ·
   2026-10-23).
@@ -97,21 +97,21 @@ the one before it.
    Anything else stops the run before it touches production.
 2. **The migration.** `db:migrate`, then `db:verify`, against production's connection string,
    the repository secret `DATABASE_URL`. A build whose `package.json` names no `db:migrate`
-   skips this job's steps. A failed migration stops the promotion, and production
+   skips this job's steps. A failed migration stops the promotion. Production then
    serves the previous release unchanged (why: a schema that moved with no code behind it is one
-   migration to repair, and code that moved with no schema behind it is an outage · 2026-10-23).
-3. **The promotion.** The production deployment of that commit, built when the merge pushed, is
-   read until it is READY, for fifteen minutes at most. ERROR or CANCELED stops the promotion
+   migration to fix. Code that moved with no schema behind it is an outage · 2026-10-23).
+3. **The promotion.** The workflow reads the production deployment of that commit, built when the
+   merge pushed, until it is READY, for fifteen minutes at most. ERROR or CANCELED stops the promotion
    with production untouched. One call promotes it (`POST /v10/projects/<id>/promote/<deployment>`)
-   and the project is read until that deployment is current. A deployment that is current
+   and the workflow reads the project until that deployment is current. A deployment that is current
    already is a no-op, so a failed run can be re-run.
-4. **One read.** Each production domain is fetched once and its status code printed. No retry,
+4. **One read.** The workflow fetches each production domain once and prints its status code. No retry,
    no watch. Jamie reads the run.
 
-The checks that must be green before the merge and the dispatch: `ci` on `main`'s head, the
-UAT deployment of that head READY, the staged production build of it READY. `promote.sh status` prints all three.
-The release pull request carries no checks of its own: a pull request opened with the workflow
-token starts no workflow (why: the checks ran on the push that built UAT, and the release commit
+Three checks must be green before the merge and the dispatch. They are `ci` on `main`'s head,
+the UAT deployment of that head READY and the staged production build of it READY. `promote.sh status` prints all three.
+The release pull request carries no checks of its own. A pull request opened with the workflow
+token starts no workflow (why: the checks ran on the push that built UAT. The release commit
 adds the changelog and the version and nothing else · 2026-10-23).
 
 What never happens:
@@ -129,16 +129,16 @@ A hotfix is a ticket: a triage stub with `priority: P0`. Its merge reaches UAT. 
 production, Jamie says `release` and then `promote` in the session at once, and the session
 runs `release.sh` and `promote.sh run --tag <tag>`. A promotion carries everything merged before it, so `promote.sh status` says what rides
 with the fix. Where the bad deployment must
-leave production before the fix is built, the rollback below is the stop-gap.
+leave production before the session builds the fix, the rollback below is the stop-gap.
 
 ## The rollback
 
 `.icm/scripts/rollback.sh` names the current production deployment and the previous READY one,
 and prints the command that puts the previous one back: `vercel rollback <deployment> --scope
-<team>`. It runs nothing. Jamie runs the command. A rollback changes the code, not the database:
-migrations are forward-only, so the previous code must tolerate the schema the batch left. A
-schema the previous code cannot tolerate is repaired forward, as a ticket (why: a data rollback
-loses the client's rows, and a code rollback loses nothing · 2026-10-23).
+<team>`. It runs nothing. Jamie runs the command. A rollback changes the code, not the database.
+Migrations are forward-only, so the previous code must tolerate the schema the batch left. The
+fix for a schema that the previous code cannot tolerate goes forward, as a ticket (why: a data
+rollback loses the client's rows. A code rollback loses nothing · 2026-10-23).
 
 ## Setup, once
 

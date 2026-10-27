@@ -655,7 +655,8 @@ jobs:
           exit "$fail"
 
   writing:
-    # Simplified Technical English as advice: findings in the run summary, never a failure.
+    # Simplified Technical English as advice: every finding in the job log and in the run
+    # summary, never a failure.
     # The same linter commit as the house's check.yml. The template's copy of the linter's repo
     # is skipped: its examples hold bad text on purpose, and no file in the copy is edited.
     # STE_SKILL_SHA is in the workflow's env, so the ste job reads the same commit.
@@ -671,5 +672,5 @@ jobs:
       - name: Lint every markdown file, as advice
         run: |
           out="$(git ls-files -z '*.md' '*.md.jinja' ':!:template/.claude/skills/*asd-ste100*' | xargs -0 python3 -I /tmp/ste/scripts/ste-lint.py 2>&1 || true)"
-          { echo '## Simplified Technical English (advice)'; echo; echo '```'; echo "$out" | tail -n 200; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
-          echo "$out" | tail -n 40
+          { echo '## Simplified Technical English (advice)'; echo; echo '```'; echo "$out"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          echo "$out"

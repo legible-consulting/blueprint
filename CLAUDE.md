@@ -1,7 +1,7 @@
 # blueprint
 
-Public template, conventions and workshop kit repo. Everything here is rendered into other
-repositories or read by workshop attendees, so: no client names, no contact details, no
+Public template, conventions and workshop kit repo. Copier renders everything here into other
+repositories, or workshop attendees read it, so: no client names, no contact details, no
 secrets, no internal notes. The template is one root, `template/`. It renders a client build,
 or with `workspace` yes a client's ICM workspace. Its files are Jinja (`.jinja` suffix) or
 copied as is, and a file or folder whose name carries a question renders only on yes. The

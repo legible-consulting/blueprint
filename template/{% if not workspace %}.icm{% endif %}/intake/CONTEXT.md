@@ -2,7 +2,7 @@
 
 `.icm/intake/` holds every ticket of this repo. A ticket is a markdown **stub**. The stub's
 path is its identity. The stub's folder is its status. Nothing else records what is open,
-done or dropped: no ticket numbers, no board file, no `TODO.md` (why: one home for the work,
+done or dropped. There are no ticket numbers, no board file and no `TODO.md` (why: one home for the work,
 in the repo where the work is · 2026-10-21).
 
 This file is the whole contract. It stands alone: a session that reads only this file and
@@ -40,11 +40,11 @@ Rules of the folder:
   Slugs are kebab-case. The `feature-slug` line in a stub equals its file name.
 - **Status is positional.** A stub in its epic folder is open. A stub in `_done/` is done.
   Dropped work also moves to `_done/`, with a `> Dropped: <reason>, <date>` line at the top.
-  Nothing is deleted.
+  No one removes anything.
 - **The ticket line names the open path.** The pull request body's `ticket:` line is the
   stub's path when the ticket started: `.icm/intake/<epic-slug>/<feature-slug>.md` or
   `.icm/intake/triage/<slug>.md`. The line does not change when the file moves (why: the
-  line is the ticket's identity, and a move changes the status, not the identity ·
+  line is the ticket's identity. A move changes the status, not the identity ·
   2026-10-22). A reader that resolves the line to a file looks in this order:
   1. The path as written. The stub is there on `main` while the pull request is open.
   2. The same path with `_done/` before the file name. The stub is there on the branch from
@@ -98,8 +98,8 @@ others when they are present. `complexity` decides the first gate (see The loop)
 
 ### The breakdown
 
-`<epic-slug>/breakdown.md` is the epic's one review surface. Jamie reads it before any stub
-is built. Edit it and re-cut the stubs to steer.
+`<epic-slug>/breakdown.md` is the epic's one review surface. Jamie reads it before a session
+builds any stub. Edit it and re-cut the stubs to steer.
 
 ```md
 # Breakdown: <epic title>
@@ -165,7 +165,7 @@ moves on. Never widen a pull request to absorb it. Never lose it in chat.
 - [ ] <One observable result per line. The pull request copies these lines.>
 ```
 
-No breakdown, no `sequence`, no `depends-on`. The acceptance criteria are required:
+No breakdown, no `sequence`, no `depends-on`. The stub needs its acceptance criteria:
 `new-run.sh` copies them into the pull request, and a stub without them gets one placeholder
 line to fill by hand. The folder is a backlog, not a batch. Jamie prunes it. A session only
 adds to it and consumes from it.
@@ -174,8 +174,8 @@ adds to it and consumes from it.
 
 The build order says which stub of an epic goes first. It does not say which epic goes first.
 When two or more epics are open, `README.md` holds that order under `## Order`. A session
-never sets the order on a guess (why: epics cut at the same time compete for the same weeks,
-and the order is Jamie's call · 2026-10-25).
+never sets the order on a guess (why: epics cut at the same time compete for the same weeks.
+The order is Jamie's call · 2026-10-25).
 
 ```md
 ## Order
@@ -207,13 +207,13 @@ Set by Jamie on <YYYY-MM-DD>.
 - **The default order**, for the question's default only:
   1. `triage` first (why: Jamie clears the small chores before an epic starts · 2026-10-25).
   2. Two epics that touch the same files run one after the other. The epic that adds a route,
-     a card or a column goes before the epic that restyles them (why: a restyle done before
-     the structure changes is done twice · 2026-10-25).
+     a card or a column goes first. The epic that restyles them goes after it (why: a restyle
+     before the structure changes costs a second restyle · 2026-10-25).
   3. Then the epic that fixes a break a user sees today. Then the epic with the earliest
      deadline. Then the epic with more `P0` stubs.
 - **A link across epics moves one stub, not its epic.** An epic can wait on one stub of an
   epic later in the order. Then that one stub runs before the waiting epic. The rest of its
-  epic keeps its place (why: one stub lifts the block, and a move of the whole epic overrides
+  epic keeps its place (why: one stub lifts the block. A move of the whole epic overrides
   Jamie's order · 2026-10-25).
 - **A new epic gets a place.** A session that cuts an epic while `## Order` exists asks where
   the new line goes, with the table, and writes the answer.
@@ -229,24 +229,24 @@ client's words to the stubs:
 - **One story becomes one epic.** The breakdown's `source:` line names the story: its number,
   its title in the client's language, its author, its date and its link. A `story:` line
   after `epic-slug:` carries the number (why: the client's list and the backlog read the
-  same, and a reader goes from a stub to the story in one step · 2026-10-23).
+  same. A reader goes from a stub to the story in one step · 2026-10-23).
 - **`## What I understood` restates the story** in the session's words. Then it names what
   exists in the repo that the story replaces or reuses. Then it lists the questions, numbered,
   each with a default, under `### Questions for <the client>` and `### Questions for Jamie`
-  (why: a misread is caught before any cut, and the client answers in one reply ·
+  (why: the answers catch a misread before any cut. The client answers in one reply ·
   2026-10-23).
 - **A table `## Criteria → stubs` lists every acceptance criterion of the story**, once, in
-  the story's order, with the stub that carries it, or `rule: README` for a rule that binds the
+  the story's order. Each row names the stub that carries it, or `rule: README` for a rule that binds the
   whole product, or `not built: <reason>`. Nothing the client wrote is lost silently (why: the
   client checks their own list against the table in one read · 2026-10-23).
-- **Every stub of the epic carries `- story: <n>`** after `- epic:`. The line is absent when
-  the epic has no story (why: the pull request, the stub and the story stay linked without a
+- **Every stub of the epic carries `- story: <n>`** after `- epic:`. With no story, the line is
+  absent (why: the pull request, the stub and the story stay linked without a
   ticket number · 2026-10-23).
 - **A story that only states rules for the whole product** becomes decisions of record in
   `README.md`, not an epic. The breakdowns name the decisions they rest on (why: a rule that
-  binds every epic has one home, and an epic for it would never close · 2026-10-23).
-- **`README.md` lists the stories in order** with their epic slug and state, so the client's
-  list and the backlog read the same (why: the client asks "where is my story 12?" and the
+  binds every epic has one home. An epic for it would never close · 2026-10-23).
+- **`README.md` lists the stories in order** with their epic slug and state. The client's
+  list and the backlog then read the same (why: the client asks "where is my story 12?" and the
   answer is one row · 2026-10-23).
 
 ## A request with no stub
@@ -280,8 +280,8 @@ A question for Jamie follows the same rules, and three more:
 3. Make each question answerable with one word where that is possible.
 
 Write the questions in the pull request body under `## Questions`, or in the breakdown under
-`## What I understood`, and stop. Do not build on a guess (why: Jamie reads on a phone, and a
-short numbered list with defaults is answered in one reply · 2026-10-21).
+`## What I understood`, and stop. Do not build on a guess (why: Jamie reads on a phone. Jamie
+answers a short numbered list with defaults in one reply · 2026-10-21).
 
 ## The loop
 
@@ -310,8 +310,8 @@ turn · 2026-10-21). The judgement stays with Jamie.
    that epic's `breakdown.md`.
 2. **Start it with the script.** `.icm/scripts/new-run.sh <epic>/<slug>` (or
    `triage/<slug>`) cuts the branch `<slug>` (or `triage/<slug>`) from `main`, moves the stub
-   into its `_done/`, pushes, and opens the draft pull request from
-   `.github/pull_request_template.md` with the ticket path and the acceptance criteria filled
+   into its `_done/` and pushes. Then it opens the draft pull request from
+   `.github/pull_request_template.md`, with the ticket path and the acceptance criteria filled
    in. The move is a status mark, not a gate. The merge makes it true.
 3. **Spec approved.** The script keeps the gate for a `medium`, `high` or `research` stub and
    drops it for a `low` stub or a triage stub. A stub whose `Notes` leave a decision open
@@ -337,20 +337,20 @@ the new one · Jamie, 2026-10-27).
    run build, lint, typecheck, test, format or dev locally. A red check: fix, commit, push,
    read again.
 5. **Close out on the branch.** Park every off-ticket finding as a triage stub in the same
-   pull request and list it under `Parked`. Then run `.icm/scripts/close-out.sh`: when an
-   epic has no open stub left and no sibling pull request is open, it moves the epic folder
+   pull request and list it under `Parked`. Then run `.icm/scripts/close-out.sh`. When an
+   epic has no open stub left and no sibling pull request is open, the script moves the epic folder
    into `.icm/intake/_done/` and commits. Push.
 6. **Finish the body, then flip the pull request to ready** when CI is green and the
    preview exists. Before the flip:
    - Set the title in Conventional Commits form, for example `chore(env): declare NODE_ENV
      in .env.example`. The script opens the pull request with the stub's title as it is
-     (why: the squash merge makes the title the commit on `main`, and release-please reads
+     (why: the squash merge makes the title the commit on `main`. release-please reads
      that commit · 2026-10-22).
    - Put the preview URL on the `preview:` line. The preview URL is the deployment's branch
      alias, `<project>-git-<branch>-<team>.vercel.app`. The vercel[bot] comment on the pull
      request links it as Preview. The Vercel commit status links the inspector page, not
      the preview.
-   - Fill `What changes` and `How to test`. Delete `Questions` when there is none. Write
+   - Fill `What changes` and `How to test`. Remove `Questions` when there is none. Write
      `None` under `Parked` when the pull request adds no stub.
    Tick nothing. Stop with the stop report (§ The stop report).
 7. **Jamie tests the preview** and ticks **Ready to merge**. Then the session runs

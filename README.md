@@ -1,8 +1,8 @@
 # blueprint
 
-Legible Consulting's method, public: one copier template that renders a client build, or a
-client's ICM workspace, from its answers, the conventions every rendered repo follows, and the
-workshop kit. The questions are the bank in `copier.yml`: the slug, the client's name, the
+Legible Consulting's method, public, in three parts: one copier template, the conventions every
+rendered repo follows, and the workshop kit. The template renders a client build, or a client's
+ICM workspace, from its answers. The questions are the bank in `copier.yml`: the slug, the client's name, the
 language, `workspace`, then for a build `monorepo`, `release`, `uat`, `database` and
 `migrations_path`.
 
@@ -47,7 +47,7 @@ Every build carries these files, whatever its answers:
 
 | Question | Yes renders or changes |
 |---|---|
-| `workspace` | a client's ICM workspace instead of a build: see The workspace below. `monorepo`, `release`, `uat` and `database` are asked only on no |
+| `workspace` | a client's ICM workspace instead of a build: see The workspace below. copier asks `monorepo`, `release`, `uat` and `database` only on no |
 | `monorepo` | `.gitignore` gains the monorepo caches. `CLAUDE.md` gains an Apps and packages table and says previews, plural |
 | `release` | `ci.yml` gains the `release` job: `.github`'s `release.yml` (release-please) on each push to `main`. `CLAUDE.md` says the release is Jamie's word `release`, and the session runs `release.sh`. No: production follows `main`, and the merge is the release |
 | `uat` (asked when `release` is yes) | the UAT shape below |
@@ -65,8 +65,8 @@ update never touches them.
 
 ### One ticket convention
 
-The contract, `.icm/intake/CONTEXT.md`, is the blueprint's and stands alone: the stub, the
-breakdown, the triage stub, the writing rules and the loop from stub to merge. There is no
+The contract, `.icm/intake/CONTEXT.md`, is the blueprint's and stands alone. It holds the stub,
+the breakdown, the triage stub, the writing rules and the loop from stub to merge. There is no
 `BUILD.md`.
 
 ### The skills
@@ -82,7 +82,7 @@ A build carries three skills in `.claude/skills/`. Claude Code loads each one fr
 
 `asd-ste100` is a copy of [danyuchn/asd-ste100-skill](https://github.com/danyuchn/asd-ste100-skill)
 at commit `3944283c183eea13fe5bd902b572da3b4de8bf44`, the commit that `check.yml` pins. The
-licence is MIT, and the copy keeps its `LICENSE`. No file in the copy is edited.
+licence is MIT, and the copy keeps its `LICENSE`. The blueprint edits no file in the copy.
 
 ### UAT
 
@@ -140,5 +140,5 @@ workspace must pass.
 
 A file or folder named `{% if uat %}name{% endif %}` renders to an empty name on no, and copier
 skips it. The build's own paths (`.icm/`, the pull request template) carry
-`{% if not workspace %}` in the same way. The content of such a file is copied as is unless its name ends in `.jinja`, so a
+`{% if not workspace %}` in the same way. Copier copies the content of such a file as is unless its name ends in `.jinja`, so a
 workflow's `${{ }}` expressions stay untouched.
