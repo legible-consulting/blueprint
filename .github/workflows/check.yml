@@ -1,7 +1,9 @@
 # check: the blueprint's walk test. Six proof answer sets render on each pull request and on
 # each push to main (five builds and one workspace), the rendered workflows, hooks and scripts are linted, and every
 # functionality question is checked for a default and a help line (CI is truth; never run
-# locally).
+# locally). The update job updates a render of v0.6.0 and of v0.8.0 to HEAD and compares the
+# result with a fresh HEAD render. The ste job compares the vendored writing skill with its
+# pinned commit.
 name: check
 
 on:
@@ -11,6 +13,11 @@ on:
 
 permissions:
   contents: read
+
+env:
+  # The asd-ste100 commit: the writing job runs its linter, and the ste job compares the
+  # template's copy with it. The same commit as the house's check.yml.
+  STE_SKILL_SHA: 3944283c183eea13fe5bd902b572da3b4de8bf44
 
 concurrency:
   group: check-${{ github.ref }}
@@ -49,18 +56,19 @@ jobs:
     # prints the board of a fixture. A workspace carries neither. actionlint reads the rendered workflows and shellcheck the rendered
     # hooks and scripts, so a template error fails here and not in a client repo. In a build,
     # new-run.sh --dry-run runs on a fixture stub and must leave the tree as it was, and the
-    # router passes its fixture test.
+    # router passes its fixture test. neon-nouat answers db/migrations, so the proof shows that
+    # the migrations_path answer gets to preview-db.yml, and not only the default.
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { name: defaults, workspace: "false", monorepo: "false", release: "true", uat: "false", database: none }
-          - { name: all, workspace: "false", monorepo: "true", release: "true", uat: "true", database: neon }
-          - { name: minimal, workspace: "false", monorepo: "false", release: "false", uat: "false", database: none }
-          - { name: workspace, workspace: "true", monorepo: "false", release: "false", uat: "false", database: none }
-          - { name: neon-nouat, workspace: "false", monorepo: "false", release: "true", uat: "false", database: neon }
-          - { name: mongodb-uat, workspace: "false", monorepo: "false", release: "true", uat: "true", database: mongodb }
+          - { name: defaults, workspace: "false", monorepo: "false", release: "true", uat: "false", database: none, migrations_path: migrations }
+          - { name: all, workspace: "false", monorepo: "true", release: "true", uat: "true", database: neon, migrations_path: migrations }
+          - { name: minimal, workspace: "false", monorepo: "false", release: "false", uat: "false", database: none, migrations_path: migrations }
+          - { name: workspace, workspace: "true", monorepo: "false", release: "false", uat: "false", database: none, migrations_path: migrations }
+          - { name: neon-nouat, workspace: "false", monorepo: "false", release: "true", uat: "false", database: neon, migrations_path: db/migrations }
+          - { name: mongodb-uat, workspace: "false", monorepo: "false", release: "true", uat: "true", database: mongodb, migrations_path: migrations }
     env:
       NAME: ${{ matrix.name }}
       WORKSPACE: ${{ matrix.workspace }}
@@ -68,6 +76,7 @@ jobs:
       RELEASE: ${{ matrix.release }}
       UAT: ${{ matrix.uat }}
       DATABASE: ${{ matrix.database }}
+      MIGRATIONS_PATH: ${{ matrix.migrations_path }}
       ACTIONLINT_VERSION: 1.7.12
       ACTIONLINT_SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
     steps:
@@ -87,7 +96,7 @@ jobs:
           copier copy --defaults --vcs-ref HEAD \
             -d slug=zz-proof -d client_name="Zz Proof" -d language=en -d "workspace=${WORKSPACE}" \
             -d "monorepo=${MONOREPO}" -d "release=${RELEASE}" -d "uat=${UAT}" \
-            -d "database=${DATABASE}" -d migrations_path=migrations \
+            -d "database=${DATABASE}" -d "migrations_path=${MIGRATIONS_PATH}" \
             . "${RUNNER_TEMP}/zz-${NAME}"
       - name: The migrations_path validator refuses a bad folder
         if: matrix.name == 'all'
@@ -149,21 +158,20 @@ jobs:
           done
           need .github/workflows/ci.yml
           need .claude/settings.json
-          for h in block-local-checks confirm-git-writes guard-plaintext-secrets; do
+          # The six hooks. A workspace keeps the three guards. The router, its test and
+          # session-start.sh are build-only, and each must be executable. Claude Code runs
+          # session-start.sh at session start and the router on each prompt, so settings.json
+          # registers the two.
+          for h in block-local-checks confirm-git-writes guard-plaintext-secrets \
+            route-request route-request.test session-start; do
             need ".claude/hooks/${h}.sh"
           done
-          need .claude/hooks/session-start.sh
-          [ ! -e .claude/hooks/session-start.sh ] || [ -x .claude/hooks/session-start.sh ] \
-            || { echo "::error::${NAME}: .claude/hooks/session-start.sh is not executable"; fail=1; }
-          jq -e '.hooks.SessionStart[0].hooks[0].command | endswith("/.claude/hooks/session-start.sh\"")' .claude/settings.json >/dev/null \
-            || { echo "::error::${NAME}: .claude/settings.json does not register session-start.sh"; fail=1; }
-          # The router is build-only. Claude Code runs it on each prompt, so settings.json
-          # registers it.
-          for h in route-request route-request.test; do
+          for h in route-request route-request.test session-start; do
             f=".claude/hooks/${h}.sh"
-            need "$f"
             [ ! -e "$f" ] || [ -x "$f" ] || { echo "::error::${NAME}: ${f} is not executable"; fail=1; }
           done
+          jq -e '.hooks.SessionStart[0].hooks[0].command | endswith("/.claude/hooks/session-start.sh\"")' .claude/settings.json >/dev/null \
+            || { echo "::error::${NAME}: .claude/settings.json does not register session-start.sh"; fail=1; }
           jq -e '.hooks.UserPromptSubmit[0].hooks[0].command | contains("route-request.sh")' .claude/settings.json >/dev/null \
             || { echo "::error::${NAME}: settings.json does not register route-request.sh"; fail=1; }
           # The three skills. asd-ste100 is a copy of the linter's repo at the pinned commit. Each
@@ -210,11 +218,11 @@ jobs:
             done
             n="$(wc -l < "$f")"
             [ "$n" -lt 90 ] || { echo "::error::${NAME}: ${f} has ${n} lines (limit 90)"; fail=1; }
-            grep -qF 'paths: ["migrations/**"]' .github/workflows/preview-db.yml \
-              || { echo "::error::${NAME}: preview-db.yml does not watch migrations/**"; fail=1; }
+            grep -qF "paths: [\"${MIGRATIONS_PATH}/**\"]" .github/workflows/preview-db.yml \
+              || { echo "::error::${NAME}: preview-db.yml does not watch ${MIGRATIONS_PATH}/**"; fail=1; }
             grep -qF '.icm/database/CONTEXT.md' CLAUDE.md || { echo "::error::${NAME}: CLAUDE.md does not route to .icm/database/CONTEXT.md"; fail=1; }
             grep -qx 'MIGRATE_AT_BUILD=' .env.example || { echo "::error::${NAME}: .env.example does not name MIGRATE_AT_BUILD"; fail=1; }
-            grep -qx 'migrations_path: migrations' .copier-answers.yml \
+            grep -qxF "migrations_path: ${MIGRATIONS_PATH}" .copier-answers.yml \
               || { echo "::error::${NAME}: .copier-answers.yml does not keep migrations_path"; fail=1; }
           else
             ! grep -qF '.icm/database/CONTEXT.md' CLAUDE.md || { echo "::error::${NAME}: CLAUDE.md routes to .icm/database/CONTEXT.md"; fail=1; }
@@ -470,6 +478,158 @@ jobs:
           [ -d .icm/scripts ] && dirs+=(.icm/scripts)
           find "${dirs[@]}" -name '*.sh' -print0 | xargs -0 shellcheck --severity=warning
 
+  update:
+    # copier update from an older tag to HEAD, as a live repo takes a new tag. from-v0.6.0 starts
+    # in the layout of templates/{{ tier }}. from-v0.8.0 starts in the bank before workspace and
+    # database, with UAT, and updates to neon. copier renders the old tag with the old answers
+    # and HEAD with the new answers, and applies the difference. After the update: no conflict
+    # marker remains, _commit is HEAD's, the files equal a fresh HEAD render with the same
+    # answers in content and executable bit, no file of the old render stays that HEAD does not
+    # render, and each written-once file keeps the old render's content. A failure names the
+    # file. The tag v1.0.0 waits on this job.
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: from-v0.6.0
+            ref: v0.6.0
+            old_answers: tier=app
+            new_answers: workspace=false monorepo=false release=true uat=false database=none
+          - name: from-v0.8.0
+            ref: v0.8.0
+            old_answers: monorepo=false release=true uat=true
+            new_answers: workspace=false monorepo=false release=true uat=true database=neon migrations_path=migrations
+    env:
+      NAME: ${{ matrix.name }}
+      REF: ${{ matrix.ref }}
+      OLD_ANSWERS: slug=zz client_name=Zz language=en ${{ matrix.old_answers }}
+      NEW_ANSWERS: slug=zz client_name=Zz language=en ${{ matrix.new_answers }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # copier reads the tags. Nothing is written into this folder, so copier sees a clean
+          # template.
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install copier
+        # The version of the render job.
+        run: pipx install copier==9.19.1
+      - name: Render the old tag and commit it
+        # The source is an absolute path: copier update reads it from _src_path and runs in
+        # the rendered folder. copier update refuses a folder that is not a clean git repo.
+        run: |
+          d=()
+          for a in $OLD_ANSWERS; do d+=(-d "$a"); done
+          old="${RUNNER_TEMP}/old"
+          copier copy --defaults --vcs-ref "$REF" "${d[@]}" "$GITHUB_WORKSPACE" "$old"
+          cp -a "$old" "${RUNNER_TEMP}/snapshot"
+          git -C "$old" init -q -b main
+          git -C "$old" config user.name check
+          git -C "$old" config user.email check@example.invalid
+          git -C "$old" add -A
+          git -C "$old" commit -q -m "render ${REF}"
+      - name: Update to HEAD
+        working-directory: ${{ runner.temp }}/old
+        run: |
+          d=()
+          for a in $NEW_ANSWERS; do d+=(-d "$a"); done
+          copier update --defaults --vcs-ref HEAD --conflict inline "${d[@]}"
+      - name: Render HEAD with the same answers
+        # The reference.
+        run: |
+          d=()
+          for a in $NEW_ANSWERS; do d+=(-d "$a"); done
+          copier copy --defaults --vcs-ref HEAD "${d[@]}" "$GITHUB_WORKSPACE" "${RUNNER_TEMP}/ref"
+      - name: The update equals a fresh HEAD render
+        run: |
+          fail=0
+          up="${RUNNER_TEMP}/old"
+          ref="${RUNNER_TEMP}/ref"
+          snap="${RUNNER_TEMP}/snapshot"
+          err() { echo "::error::${NAME}: $1"; fail=1; }
+          # The written-once files. Each name must be in _skip_if_exists, with its Jinja
+          # condition removed, so a change to that list fails here.
+          once=(README.md .icm/intake/README.md CLAUDE.md .gitignore .env.example)
+          skip="$(yq '._skip_if_exists[]' copier.yml | sed -E 's/\{%[^%]*%\}//g')"
+          for f in "${once[@]}"; do
+            grep -qxF "$f" <<<"$skip" || { echo "::error file=copier.yml::${NAME}: _skip_if_exists does not name ${f}"; fail=1; }
+          done
+          # A written-once file that the old render has stays as it was, and is not compared
+          # with HEAD. One that the old render does not have is compared like any other file.
+          kept=()
+          for f in "${once[@]}"; do
+            if [ -e "${snap}/${f}" ]; then kept+=("$f"); fi
+          done
+          for f in "${kept[@]}"; do
+            if [ ! -e "${up}/${f}" ]; then
+              err "the update deleted the written-once file ${f}"
+            elif ! cmp -s "${snap}/${f}" "${up}/${f}"; then
+              err "the update changed the written-once file ${f}"
+            fi
+          done
+          echo "Written-once files kept: ${kept[*]}"
+          while IFS= read -r f; do
+            [ -n "$f" ] || continue
+            err "a conflict marker remains in ${f#"${up}/"}"
+          done < <(grep -rlE --exclude-dir=.git '^(<<<<<<<|>>>>>>>)' "$up" || true)
+          a="$(yq '._commit' "${up}/.copier-answers.yml")"
+          b="$(yq '._commit' "${ref}/.copier-answers.yml")"
+          if [ -z "$a" ] || [ "$a" = null ] || [ "$a" != "$b" ]; then
+            err ".copier-answers.yml has _commit '${a}', and a HEAD render has '${b}'"
+          fi
+          # Paths, not diff -r -x: diff -x README.md also skips each other README.md, such as
+          # the one in .claude/skills/asd-ste100/.
+          out="$(printf '%s\n' .copier-answers.yml "${kept[@]}")"
+          files() {
+            (cd "$1" && find . -path ./.git -prune -o \( -type f -o -type l \) -print) \
+              | sed 's|^\./||' | grep -vxFf <(echo "$out") | LC_ALL=C sort || true
+          }
+          fu="$(files "$up")"
+          fr="$(files "$ref")"
+          while IFS= read -r f; do
+            [ -n "$f" ] || continue
+            err "${f} is a file of the old render that HEAD does not render"
+          done < <(LC_ALL=C comm -23 <(echo "$fu") <(echo "$fr"))
+          while IFS= read -r f; do
+            [ -n "$f" ] || continue
+            err "${f} is a file that the update did not render"
+          done < <(LC_ALL=C comm -13 <(echo "$fu") <(echo "$fr"))
+          n=0
+          while IFS= read -r f; do
+            [ -n "$f" ] || continue
+            n=$((n + 1))
+            echo "compare ${f}"
+            if ! cmp -s "${up}/${f}" "${ref}/${f}"; then
+              err "${f} is not the same as in a fresh HEAD render"
+              diff -u "${ref}/${f}" "${up}/${f}" | head -n 40 || true
+            fi
+            xu=no; xr=no
+            if [ -x "${up}/${f}" ]; then xu=yes; fi
+            if [ -x "${ref}/${f}" ]; then xr=yes; fi
+            [ "$xu" = "$xr" ] || err "${f} is executable: ${xu} after the update, ${xr} in a fresh HEAD render"
+          done < <(LC_ALL=C comm -12 <(echo "$fu") <(echo "$fr"))
+          echo "Compared ${n} files."
+          [ "$n" -gt 0 ] || err "no file was compared"
+          exit "$fail"
+
+  ste:
+    # The template's asd-ste100 is a copy of the linter's repo at STE_SKILL_SHA, and no file in
+    # it is edited. A difference fails here and shows the diff.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Fetch the skill at its pinned commit
+        run: |
+          git clone -q https://github.com/danyuchn/asd-ste100-skill "${RUNNER_TEMP}/ste"
+          git -C "${RUNNER_TEMP}/ste" checkout -q "$STE_SKILL_SHA"
+      - name: The vendored copy equals the pinned commit
+        run: |
+          diff -r -x .git "${RUNNER_TEMP}/ste" "template/.claude/skills/{% if not workspace %}asd-ste100{% endif %}" \
+            || { echo "::error::the vendored asd-ste100 is not the same as ${STE_SKILL_SHA}"; exit 1; }
+
   questions:
     # Every functionality question (type bool) carries a default and a help line, so a kickoff
     # can answer with the defaults and a reader knows what yes buys.
@@ -493,9 +653,8 @@ jobs:
     # Simplified Technical English as advice: findings in the run summary, never a failure.
     # The same linter commit as the house's check.yml. The template's copy of the linter's repo
     # is skipped: its examples hold bad text on purpose, and no file in the copy is edited.
+    # STE_SKILL_SHA is in the workflow's env, so the ste job reads the same commit.
     runs-on: ubuntu-latest
-    env:
-      STE_SKILL_SHA: 3944283c183eea13fe5bd902b572da3b4de8bf44
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
