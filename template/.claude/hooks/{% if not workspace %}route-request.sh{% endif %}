@@ -6,7 +6,9 @@
 #
 # Deterministic, under 100 ms, no model (modelled on block-local-checks.sh): reads the
 # UserPromptSubmit payload on stdin, looks at the prompt, and injects ONE additionalContext
-# line. It reads files only: no git, no gh. Two kinds of line:
+# line. It reads files only: no git, no gh. Each process costs time, so the matching uses bash
+# builtins where it can: [[ =~ ]] with an explicit word boundary in place of grep's \b. A
+# common prompt starts two jq processes and few others. Two kinds of line:
 #
 #   [router] Route: <the contract to read and the command to run> (<why>)
 #       Directive. Emitted for a bare form — `new`, `new <slug>`, `build <slug>`,
@@ -41,7 +43,7 @@
 set -Eeuo pipefail
 trap 'exit 0' ERR
 
-input="$(cat 2>/dev/null || true)"
+IFS= read -r -d '' input || true
 command -v jq >/dev/null 2>&1 || exit 0            # no jq → can't parse → stay silent
 prompt="$(printf '%s' "$input" | jq -r '.prompt // ""' 2>/dev/null || true)"
 [ -n "$prompt" ] || exit 0
@@ -52,9 +54,11 @@ case "$prompt" in /*) exit 0 ;; esac
 # A skill or slash-command's own raw file — its YAML frontmatter (`---` then `name: …`) — is
 # not a fresh request; trim leading blank lines first so a wrapped/re-submitted body still
 # matches.
-trimmed="$(printf '%s\n' "$prompt" | sed '/./,$!d')"
-if [ "$(printf '%s' "$trimmed" | sed -n '1p')" = "---" ] \
-   && printf '%s' "$trimmed" | sed -n '2p' | grep -qE '^name:[[:space:]]'; then
+nl=$'\n'
+trimmed="$prompt"
+while [ "${trimmed:0:1}" = "$nl" ]; do trimmed="${trimmed#"$nl"}"; done
+line1="${trimmed%%"$nl"*}"; line2="${trimmed#*"$nl"}"; line2="${line2%%"$nl"*}"
+if [ "$line1" = "---" ] && [[ $line2 =~ ^name:[[:space:]] ]]; then
   exit 0
 fi
 
@@ -86,8 +90,16 @@ suggest() { emit "Suggest: $1 This line comes from .claude/hooks/route-request.s
 
 loop=".icm/intake/CONTEXT.md"
 
-# One lowercased copy for matching (first 2000 chars is plenty and keeps grep fast).
-p="$(printf '%.2000s' "$prompt" | tr '[:upper:]' '[:lower:]')"
+# One lowercased copy for matching (first 2000 chars is plenty and keeps the matching fast).
+# bash 3.2 (macOS) has no ${p,,}: tr does it there.
+p="${prompt:0:2000}"
+if [ "${BASH_VERSINFO[0]}" -ge 4 ]; then p="${p,,}"; else p="$(printf '%s' "$p" | tr '[:upper:]' '[:lower:]')"; fi
+
+# A word boundary for [[ =~ ]], portable where \b is not: start or a non-word character before,
+# a non-word character or the end after.
+B='(^|[^a-z0-9_])'
+E='([^a-z0-9_]|$)'
+has() { [[ $p =~ $1 ]]; }
 
 # --- resolve_slug: where a slug lives, if anywhere ------------------------------------------------
 
@@ -132,7 +144,7 @@ many() { [ "$(printf '%s\n' "$hits" | wc -l)" -gt 1 ]; }
 # The branch of the one hit: triage/<slug> for a triage stub, <slug> for an epic stub.
 branch_of() {
   local f="$hits" s
-  s="$(basename "$f" .md)"
+  s="${f##*/}"; s="${s%.md}"
   case "$f" in .icm/intake/triage/*) printf 'triage/%s' "$s" ;; *) printf '%s' "$s" ;; esac
 }
 # The ticket of the one open hit, as new-run.sh takes it: <epic>/<slug> or triage/<slug>.
@@ -183,12 +195,15 @@ not_here() {
 # --- layer 1: bare forms (deterministic file lookups, no heuristics) ------------------------------
 
 # Normalise: collapse whitespace, drop trailing punctuation, so `New`, `new.` and `build x ` match.
-bare="$(printf '%s' "$p" | tr '\n' ' ' | sed -E 's/[[:space:]]+/ /g; s/^ //; s/[ .!]+$//')"
+bare="${p//[[:space:]]/ }"
+while [[ $bare == *"  "* ]]; do bare="${bare//  / }"; done
+bare="${bare# }"
+while [[ $bare == *[\ .!] ]]; do bare="${bare%?}"; done
 first_word="${bare%% *}"
 rest="${bare#"$first_word"}"; rest="${rest# }"
 slug="${rest%% *}"; after="${rest#"$slug"}"; after="${after# }"
 is_slug=0
-printf '%s' "$slug" | grep -Eq '^([a-z0-9]+(-[a-z0-9]+)*/)?[a-z0-9]+(-[a-z0-9]+)*$' && is_slug=1
+if [[ $slug =~ ^([a-z0-9]+(-[a-z0-9]+)*/)?[a-z0-9]+(-[a-z0-9]+)*$ ]]; then is_slug=1; fi
 # A slug with a hyphen or a slash is a name. A plain word that resolves nowhere is conversation.
 named=0
 case "$slug" in *-*|*/*) named=1 ;; esac
@@ -242,7 +257,7 @@ case "$first_word" in
     ;;
   # `merge <number>` or `merge <slug>` → merge.sh after the tick, then one read of ci on main.
   merge)
-    if [ -n "$slug" ] && [ -z "$after" ] && printf '%s' "$slug" | grep -Eq '^[0-9]+$'; then
+    if [ -z "$after" ] && [[ $slug =~ ^[0-9]+$ ]]; then
       route "run .icm/scripts/merge.sh $slug ($loop § The loop, step 7). It refuses without the Ready to merge tick. Then read ci on main once and say what moved."
     elif [ "$is_slug" -eq 1 ] && [ -z "$after" ]; then
       if resolve_slug "$slug"; then
@@ -334,7 +349,7 @@ esac
 
 # Pure questions / discussion pass through untouched: an interrogative opener, or a prompt that is
 # a single question mark-terminated line with no imperative work verb anywhere.
-q_word="$(printf '%s' "$p" | awk '{print $1; exit}' | tr -d '?,.!')"
+q_word="${p#"${p%%[![:space:]]*}"}"; q_word="${q_word%%[[:space:]]*}"; q_word="${q_word//[?,.!]/}"
 case "$q_word" in
   what|why|how|where|when|who|which|is|are|was|were|can|could|does|do|did|should|would|will|explain|tell)
     exit 0 ;;
@@ -344,11 +359,11 @@ esac
 # codebase produces findings, not a pull request — and the classifiers below would happily route
 # a long audit request to an epic (length) or `chore` (the words "ci config", "tooling",
 # "migration" appear in almost any config audit). Bail before that can happen.
-if printf '%s' "$p" | grep -Eq '\b(analy[sz]e|analysis|audit|review|investigate|interrogate|compare|assess|evaluate|inspect|summari[sz]e|understand|walk me through|talk me through)\b'; then
+if has "${B}(analy[sz]e|analysis|audit|review|investigate|interrogate|compare|assess|evaluate|inspect|summari[sz]e|understand|walk me through|talk me through)${E}"; then
   exit 0
 fi
-if printf '%s' "$p" | head -n1 | grep -q '?[[:space:]]*$' \
-   && ! printf '%s' "$p" | grep -Eq '\b(fix|add|build|implement|create|change|update|rename|remove|refactor|upgrade|bump|migrate)\b'; then
+if [[ ${p%%"$nl"*} =~ \?[[:space:]]*$ ]] \
+   && ! has "${B}(fix|add|build|implement|create|change|update|rename|remove|refactor|upgrade|bump|migrate)${E}"; then
   exit 0
 fi
 
@@ -357,17 +372,17 @@ fi
 lane_hint() { printf '.icm/lanes/%s/CONTEXT.md with the report: write the triage stub first, then run .icm/scripts/new-run.sh triage/<slug>' "$1"; }
 
 # Bug: something that used to work is now wrong.
-if printf '%s' "$p" | grep -Eq "\b(bug|broken|breaks|crash(es|ed)?|error|exception|regression|500|404)\b|\b(doesn'?t|does not|won'?t|can'?t|stopped|no longer|fail(s|ed|ing)?) (work|load|open|save|send|render|show)|is (broken|failing|down)"; then
+if has "${B}(bug|broken|breaks|crash(es|ed)?|error|exception|regression|500|404)${E}|${B}(doesn'?t|does not|won'?t|can'?t|stopped|no longer|fail(s|ed|ing)?) (work|load|open|save|send|render|show)|is (broken|failing|down)"; then
   suggest "$(lane_hint bug) (this prompt looks like a bug report: reproduce, then fix the cause)."
 fi
 
 # Tweak: tiny, fully-specified surface adjustment.
-if printf '%s' "$p" | grep -Eq "\b(tweak|typo|reword|rename|re-?label|copy change|wording|spacing|padding|colou?r|font|icon|tooltip|placeholder)\b|\b(small|tiny|quick|minor) (change|fix|adjustment|update)\b"; then
+if has "${B}(tweak|typo|reword|rename|re-?label|copy change|wording|spacing|padding|colou?r|font|icon|tooltip|placeholder)${E}|${B}(small|tiny|quick|minor) (change|fix|adjustment|update)${E}"; then
   suggest "$(lane_hint tweak) (this prompt looks like a tweak: a small change that the request fully specifies)."
 fi
 
 # Chore: no user-facing behaviour change.
-if printf '%s' "$p" | grep -Eq "\b(refactor|chore|clean ?up|dep(endency)? bump|bump (the )?dep|upgrade [a-z@]|update (the )?dependenc|migration|migrate (the )?(db|database|schema|data)|add (an? )?index|drop (an? )?index|ci (config|workflow)|tooling)\b"; then
+if has "${B}(refactor|chore|clean ?up|dep(endency)? bump|bump (the )?dep|upgrade [a-z@]|update (the )?dependenc|migration|migrate (the )?(db|database|schema|data)|add (an? )?index|drop (an? )?index|ci (config|workflow)|tooling)${E}"; then
   suggest "$(lane_hint chore) (this prompt looks like a chore: no change in behaviour. Migrations are forward-only)."
 fi
 
@@ -376,8 +391,12 @@ fi
 # A prompt that names an existing stub is not new content — say so instead of a new stub; the
 # user picks the form. Only kebab-case tokens with a hyphen are checked (every slug in practice
 # has one), so ordinary words never hit the filesystem.
-mentioned=""
-for tok in $(printf '%s' "$p" | tr -c 'a-z0-9\n-' ' ' | tr ' ' '\n' | grep -E '^[a-z0-9]+(-[a-z0-9]+)+$' | sort -u | head -n 40 || true); do
+mentioned=""; seen=" "; checked=0
+for tok in ${p//[^a-z0-9-]/ }; do
+  [[ $tok =~ ^[a-z0-9]+(-[a-z0-9]+)+$ ]] || continue
+  case "$seen" in *" $tok "*) continue ;; esac
+  seen="$seen$tok "; checked=$((checked + 1))
+  [ "$checked" -le 40 ] || break
   if resolve_slug "$tok"; then mentioned="${mentioned:+$mentioned; }$tier: $(hit_list)"; fi
 done
 if [ -n "$mentioned" ]; then
@@ -385,13 +404,18 @@ if [ -n "$mentioned" ]; then
 fi
 
 # Big dump: many bullets/lines or very long → cut an epic.
-bullet_lines="$(printf '%s\n' "$prompt" | grep -Ec '^[[:space:]]*([-*+•]|[0-9]+[.)])[[:space:]]' || true)"
+bullet_lines=0
+if [ "${#prompt}" -le 800 ]; then
+  while IFS= read -r line || [ -n "$line" ]; do
+    if [[ $line =~ ^[[:space:]]*([-*+]|•|[0-9]+[.\)])[[:space:]] ]]; then bullet_lines=$((bullet_lines + 1)); fi
+  done <<<"$prompt"
+fi
 if [ "${#prompt}" -gt 800 ] || [ "$bullet_lines" -ge 6 ]; then
   route "$loop § A request with no stub, case 2: cut an epic with a breakdown, one stub per pull request. Push it. Stop for Jamie's review. Build nothing (multi-feature dump, and no stub in .icm/intake/ matches it)."
 fi
 
 # Work-shaped and not clearly a lane: new content. Every new piece of work gets a stub first.
-if printf '%s' "$p" | grep -Eq "\b(add|build|implement|create|introduce|make|change|update|remove|delete|replace|extend|support|enable|allow|let|show|integrate|we need|we want|i want|i'?d like|need to|should be able to|new feature)\b"; then
+if has "${B}(add|build|implement|create|introduce|make|change|update|remove|delete|replace|extend|support|enable|allow|let|show|integrate|we need|we want|i want|i'?d like|need to|should be able to|new feature)${E}"; then
   route "$loop § A request with no stub: write the stub first. A one-off is a triage stub and its lane (case 1). A plan or a request that holds a decision is an epic, then a stop for Jamie's review (case 2) (new content, and no stub in .icm/intake/ matches it)."
 fi
 
