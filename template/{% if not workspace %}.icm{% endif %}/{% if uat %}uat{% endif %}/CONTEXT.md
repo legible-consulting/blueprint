@@ -126,13 +126,14 @@ Rules:
 ## The promotion
 
 The release pull request that release-please opens on each merge to `main` is the batch. After
-the sign-off is recorded, Jamie says `release` in the session, and the session runs
+the session records the sign-off, Jamie says `release` in the session, and the session runs
 `.icm/scripts/release.sh`. That merge is the release: it makes the `v*` tag and the changelog,
 and it moves nothing. Production moves on one act after it. Jamie says `promote` in the session,
 and the session runs `.icm/scripts/promote.sh run --tag <tag>`. The script dispatches
-`promote.yml` with that tag. `promote.sh status` prints the command once the tag exists (why:
-the session does the mechanics, and the one act that reaches production starts only on Jamie's
-direct word · Jamie, 2026-10-27). The run goes in this order. Each job needs the one before it.
+`promote.yml` with that tag. `promote.sh status` prints the command once the tag exists. Only
+Jamie's direct word starts the one act that reaches production (why: the session does the
+mechanics, and Jamie decides · Jamie, 2026-10-27). The run goes in this order. Each job needs
+the one before it.
 
 1. **The release.** The tag is a `v*` tag in the repository and points at a commit on `main`.
    Anything else stops the run before it touches production.
