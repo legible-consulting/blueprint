@@ -45,7 +45,8 @@ jobs:
     # file and the others none. A workspace carries the three stage contracts, each with
     # Inputs, Process, Outputs and status: stub, one gate, and a ci.yml that asks for the
     # contract check, and no build file. actionlint reads the rendered workflows and shellcheck the rendered
-    # hooks and scripts, so a template error fails here and not in a client repo.
+    # hooks and scripts, so a template error fails here and not in a client repo. In a build,
+    # new-run.sh --dry-run runs on a fixture stub and must leave the tree as it was.
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -111,6 +112,8 @@ jobs:
           need .github/pull_request_template.md
           need .icm/scripts/new-run.sh
           need .icm/scripts/close-out.sh
+          need .icm/scripts/merge.sh
+          need .icm/scripts/release.sh
           # Each lane contract keeps the three sections and stays under 60 lines. A workspace
           # has no .icm, so it has no lane.
           for l in bug tweak chore hotfix; do
@@ -206,6 +209,88 @@ jobs:
           [ "$lines" -lt 80 ] || { echo "::error::${NAME}: CLAUDE.md has ${lines} lines (limit 80)"; fail=1; }
           ! grep -rqE '(^|[^$])\{\{|\{%' CLAUDE.md README.md .gitignore .github ./*/CONTEXT.md \
             || { echo "::error::${NAME}: an unrendered Jinja tag remains"; fail=1; }
+          exit "$fail"
+      - name: new-run.sh --dry-run changes nothing
+        if: matrix.workspace == 'false'
+        working-directory: ${{ runner.temp }}/zz-${{ matrix.name }}
+        # The rendered folder becomes a git repo with one fixture stub committed. A gh that exits
+        # 99 goes first on PATH, so a dry run that calls gh fails here. Then a triage stub stays
+        # untracked, as a lane leaves it, for a dry run with --ready.
+        run: |
+          fail=0
+          git init -q -b main
+          git config user.name check
+          git config user.email check@example.invalid
+          git add -A
+          git commit -q -m render
+          mkdir -p .icm/intake/zz-epic
+          cat > .icm/intake/zz-epic/zz-stub.md <<'EOF'
+          # Stub: Zz proof stub
+
+          - feature-slug: zz-stub
+          - epic: zz-epic
+          - sequence: 1 of 1
+          - depends-on: none
+          - complexity: medium
+          - priority: P2
+
+          ## Problem
+
+          The proof needs a stub.
+
+          ## Acceptance criteria
+
+          - [ ] zz criterion one
+          - [ ] zz criterion two
+
+          ## Out of scope
+
+          - Nothing.
+          EOF
+          git add .icm/intake/zz-epic/zz-stub.md
+          git commit -q -m stub
+          nogh="${RUNNER_TEMP}/nogh-${NAME}"
+          mkdir -p "$nogh"
+          printf '#!/bin/sh\necho "gh was called" >&2\nexit 99\n' > "${nogh}/gh"
+          chmod +x "${nogh}/gh"
+          before="$(git rev-parse HEAD)"
+          out="$(PATH="${nogh}:${PATH}" bash .icm/scripts/new-run.sh zz-epic/zz-stub --dry-run)" \
+            || { echo "::error::${NAME}: the dry run of zz-epic/zz-stub failed"; fail=1; }
+          for l in 'branch: zz-stub' 'pull request: draft' '<!-- gate:spec-approved -->' \
+            '- ticket: `.icm/intake/zz-epic/zz-stub.md`' '- [ ] zz criterion one' '- [ ] zz criterion two'; do
+            grep -qxF -- "$l" <<<"$out" || { echo "::error::${NAME}: the dry run does not print '${l}'"; fail=1; }
+          done
+          [ -z "$(git status --porcelain)" ] || { echo "::error::${NAME}: the dry run changed the working tree"; fail=1; }
+          [ "$(git rev-parse HEAD)" = "$before" ] || { echo "::error::${NAME}: the dry run made a commit"; fail=1; }
+          ! git show-ref --verify --quiet refs/heads/zz-stub || { echo "::error::${NAME}: the dry run made a branch"; fail=1; }
+          cat > .icm/intake/triage/zz-fix.md <<'EOF'
+          # Stub: Zz proof fix
+
+          - lane: hotfix
+          - found-by: check.yml · 2026-10-27
+          - complexity: low
+          - priority: P0
+
+          ## Problem
+
+          The proof needs a triage stub.
+
+          ## Proposed change
+
+          None.
+
+          ## Acceptance criteria
+
+          - [ ] zz fix criterion
+          EOF
+          st="$(git status --porcelain --untracked-files=all)"
+          out="$(PATH="${nogh}:${PATH}" bash .icm/scripts/new-run.sh triage/zz-fix --ready --dry-run)" \
+            || { echo "::error::${NAME}: the dry run of triage/zz-fix failed"; fail=1; }
+          for l in 'branch: triage/zz-fix' 'pull request: ready' '- [ ] zz fix criterion'; do
+            grep -qxF -- "$l" <<<"$out" || { echo "::error::${NAME}: the triage dry run does not print '${l}'"; fail=1; }
+          done
+          ! grep -qF 'Spec approved' <<<"$out" || { echo "::error::${NAME}: the triage dry run keeps the Spec approved gate"; fail=1; }
+          [ "$(git status --porcelain --untracked-files=all)" = "$st" ] || { echo "::error::${NAME}: the triage dry run changed the working tree"; fail=1; }
           exit "$fail"
       - name: actionlint on the rendered workflows
         working-directory: ${{ runner.temp }}/zz-${{ matrix.name }}
