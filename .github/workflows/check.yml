@@ -157,6 +157,9 @@ jobs:
             [ "$n" -lt 60 ] || { echo "::error::${NAME}: ${f} has ${n} lines (limit 60)"; fail=1; }
           done
           need .github/workflows/ci.yml
+          need .github/workflows/gate.yml
+          need .github/dependabot.yml
+          grep -qF 'edited' .github/workflows/gate.yml || { echo "::error::${NAME}: gate.yml does not run on an edit of the body"; fail=1; }
           need .claude/settings.json
           # The six hooks. A workspace keeps the three guards. The router, its test and
           # session-start.sh are build-only, and each must be executable. Claude Code runs
@@ -283,6 +286,8 @@ jobs:
           [ -z "$(find .claude/skills -type f 2>/dev/null)" ] \
             || { echo "::error::${NAME}: .claude/skills holds a file"; fail=1; }
           never .github/pull_request_template.md
+          never .github/workflows/gate.yml
+          never .github/dependabot.yml
           never BUILD.md
           never .env.example
           never .claude/hooks/session-start.sh
