@@ -31,7 +31,7 @@ Every build carries `CLAUDE.md`, `README.md`, `.gitignore`, `.copier-answers.yml
 convention (`.icm/intake/` with `CONTEXT.md`, `README.md` and the empty `_done/` folders),
 `.icm/scripts/new-run.sh` and `close-out.sh`, `.github/pull_request_template.md` (the gates at
 the top), `.github/workflows/ci.yml` calling `.github`'s `check-client`, and `.claude/` (the
-three guards and the settings that register them).
+three guards, the settings that register them, and the three skills below).
 
 | Question | Yes renders or changes |
 |---|---|
@@ -54,6 +54,21 @@ update never touches them.
 The contract, `.icm/intake/CONTEXT.md`, is the blueprint's and stands alone: the stub, the
 breakdown, the triage stub, the writing rules and the loop from stub to merge. There is no
 `BUILD.md`.
+
+### The skills
+
+A build carries three skills in `.claude/skills/`. Claude Code loads each one from its
+`SKILL.md`. A workspace carries none. The contract holds every shape. A skill adds no shape.
+
+| Skill | Adds |
+|---|---|
+| `pr-conventions` | the git and GitHub mechanics: the branch, the commit, the CI read, the edit of a pull request body |
+| `ticket-craft` | the judgement behind a stub, a cut, a triage stub and a dropped stub |
+| `asd-ste100` | the writing reference for every stub, breakdown and pull request body |
+
+`asd-ste100` is a copy of [danyuchn/asd-ste100-skill](https://github.com/danyuchn/asd-ste100-skill)
+at commit `3944283c183eea13fe5bd902b572da3b4de8bf44`, the commit that `check.yml` pins. The
+licence is MIT, and the copy keeps its `LICENSE`. No file in the copy is edited.
 
 ### UAT
 
