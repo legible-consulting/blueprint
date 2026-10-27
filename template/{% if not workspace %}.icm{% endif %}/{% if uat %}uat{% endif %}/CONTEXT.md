@@ -64,10 +64,10 @@ production's rows. The one write to production is the promotion, on Jamie's word
 
 - **The batch is what merged since the last release**: `git log <last v* tag>..origin/main`. No
   file records it. release-please keeps the same list in the open release pull request.
-  `promote.sh status` prints the batch, the release pull request and `ci` on `main`'s head. It
-  also prints the UAT deployment of that head and the staged production build of it. It prints
-  the dispatch command when a release tag waits for its promotion (why: one batch, read from git, never from a second home
-  · 2026-10-23).
+  `promote.sh status` prints the batch, the release pull request and `ci` on `main`'s head (why:
+  one batch, read from git, never from a second home · 2026-10-23). It also prints the UAT
+  deployment of that head and the staged production build of it. It prints the dispatch
+  command when a release tag waits for its promotion.
 - **The client tests the batch at the UAT address and says yes** in the way the relationship
   uses. The session records it on Jamie's word: `.icm/scripts/promote.sh approve --by "<who>"
   [--note "<their words>"]`. The script posts the record on the release pull request, names the batch and the
@@ -136,8 +136,8 @@ leave production before the session builds the fix, the rollback below is the st
 `.icm/scripts/rollback.sh` names the current production deployment and the previous READY one,
 and prints the command that puts the previous one back: `vercel rollback <deployment> --scope
 <team>`. It runs nothing. Jamie runs the command. A rollback changes the code, not the database.
-Migrations are forward-only, so the previous code must tolerate the schema the batch left. A
-schema that the previous code cannot tolerate gets a forward fix, as a ticket (why: a data
+Migrations are forward-only, so the previous code must tolerate the schema the batch left. The
+fix for a schema that the previous code cannot tolerate goes forward, as a ticket (why: a data
 rollback loses the client's rows. A code rollback loses nothing · 2026-10-23).
 
 ## Setup, once
