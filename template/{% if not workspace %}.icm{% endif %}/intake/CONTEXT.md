@@ -11,9 +11,16 @@ This file is the whole contract. It stands alone: a session that reads only this
 ## Layout
 
 ```
+.claude/hooks/
+  route-request.sh       names the case of each request. The user's words win
+  session-start.sh       at session start, prints the open epics, triage and started tickets
+.icm/lanes/<lane>/CONTEXT.md
+                         one lane: bug, tweak, chore or hotfix. What differs from the loop
 .icm/scripts/
   new-run.sh             start a ticket: branch, stub into _done/, draft pull request
   close-out.sh           after the last stub: the epic folder into _done/
+  merge.sh               merge one pull request after the Ready to merge tick
+  release.sh             merge the release pull request on Jamie's word
 .icm/intake/
   CONTEXT.md             this contract
   README.md              one paragraph for a person who opens the folder, and the order of the epics
@@ -242,6 +249,20 @@ client's words to the stubs:
   list and the backlog read the same (why: the client asks "where is my story 12?" and the
   answer is one row · 2026-10-23).
 
+## A request with no stub
+
+A request that names no stub is one of three cases:
+
+1. **A one-off: a bug, a tweak or a chore.** Write the triage stub first, in the shape of
+   § The triage stub. Then follow its lane, `.icm/lanes/<lane>/CONTEXT.md`.
+2. **A plan, a story, or a request that holds a decision.** Cut an epic with a breakdown, in
+   the shapes above. Push it. Stop for Jamie's review. Build nothing before the review.
+3. **A question or a review.** Read and answer. No stub, no branch, no pull request.
+
+The router hook, `.claude/hooks/route-request.sh`, names the case. The user's words win over
+the hook (why: work with no stub has no home on `main`, and a decision needs Jamie's review ·
+2026-10-27).
+
 ## Writing rules
 
 Every stub, breakdown and pull request body is technical text. Write it in Simplified
@@ -264,11 +285,23 @@ short numbered list with defaults is answered in one reply · 2026-10-21).
 
 ## The loop
 
-One ticket is one branch and one pull request. A session runs the loop from `CLAUDE.md`. Two
+One ticket is one branch and one pull request. A session runs the loop from `CLAUDE.md`. The
 scripts in `.icm/scripts/` do the git and GitHub mechanics of one step each. They decide
-nothing, tick nothing and merge nothing (why: a script does the same thing every time and costs
-no model turn, and the judgement stays with Jamie · 2026-10-21).
+nothing and tick nothing. `merge.sh` and `release.sh` merge only after the tick or Jamie's
+word. Without it, they refuse (why: a script does the same thing every time and costs no model
+turn · 2026-10-21). The judgement stays with Jamie.
 
+0. **Resume.** `build <slug>`, or a slug with a branch, is a started ticket. Check out the
+   branch `<slug>` (or `triage/<slug>`). Read the stub in `_done/`. Read the pull request body
+   and its gates. Continue at the step the body shows:
+   - Spec approved has no tick: stop at step 3.
+   - Jamie ticked Spec approved, and the branch has no build commit: step 4.
+   - A draft with build commits: step 5 or 6.
+   - Ready, and Ready to merge has no tick: stop.
+   - Jamie ticked Ready to merge: step 7.
+
+   No branch and no pull request: stop and say so. Never open a second branch or pull request
+   for one slug (why: a second one orphans the first · 2026-10-27).
 1. **Take the next stub.** Read `README.md` § Order. Take the first line that has a ready
    stub. A stub that a link across epics moves forward goes first. In an epic, read
    `breakdown.md`, then take the open stub with the lowest `sequence` whose `depends-on` is in
@@ -286,6 +319,20 @@ no model turn, and the judgement stays with Jamie · 2026-10-21).
    carries the gate: write what you will build and your questions, push, and stop. Jamie
    ticks the box, then says "build". A missing anchor means "not required", never
    "unticked".
+
+### Revise
+
+Jamie ticked Spec approved, and the spec must change. Do these steps:
+
+1. Edit `What changes` and the acceptance criteria in the pull request body.
+2. Edit the acceptance criteria in the stub on the branch, in `_done/`.
+3. Replace the ticked Spec approved box with an unticked box. Keep its anchor.
+4. Add the line `Spec changed on <YYYY-MM-DD>: re-approval needed` under the box.
+5. Push. Stop.
+
+The session removes an approval and never grants one (why: the tick approved the old spec, not
+the new one · Jamie, 2026-10-27).
+
 4. **Build the ticket.** Commit in Conventional Commits form. Push. CI is the verdict: never
    run build, lint, typecheck, test, format or dev locally. A red check: fix, commit, push,
    read again.
@@ -305,11 +352,72 @@ no model turn, and the judgement stays with Jamie · 2026-10-21).
      the preview.
    - Fill `What changes` and `How to test`. Delete `Questions` when there is none. Write
      `None` under `Parked` when the pull request adds no stub.
-   Tick nothing. Stop. Your last message names the pull request and says what waits on
-   Jamie.
-7. **Jamie tests the preview**, ticks **Ready to merge**, and merges. A session never merges
-   and never ticks a gate (why: the gate is where Jamie's judgement enters ·
-   2026-10-21). Where `.icm/uat/CONTEXT.md` exists, the merge reaches the UAT environment,
-   and production moves on the promotion that contract describes.
+   Tick nothing. Stop with the stop report (§ The stop report).
+7. **Jamie tests the preview** and ticks **Ready to merge**. Then the session runs
+   `.icm/scripts/merge.sh <n>`, on `merge <slug>`, or in the session that built the ticket
+   when Jamie says so. The script refuses without the tick. Read `ci` on `main` once. Say what
+   moved: the UAT address where `.icm/uat/CONTEXT.md` exists, production otherwise (why: Jamie
+   ticks from the phone, and the session does the mechanics · Jamie, 2026-10-27). Where
+   `.icm/uat/CONTEXT.md` exists, production moves on the promotion that contract describes.
 
-Gates are human checkboxes. Read them. Never tick them.
+Gates are human checkboxes. Read them. Never tick them. The merge after the tick is the
+session's.
+
+## After the tick
+
+The release and the promotion each start on Jamie's direct word in the session:
+
+- **`release`.** The session runs `.icm/scripts/release.sh`. The script merges the release pull
+  request.
+  - A `uat: no` build: the merge makes the tag and the changelog. Production already follows
+    `main`.
+  - A UAT build: the merge makes the tag and moves nothing.
+  - A build with `release` no has no release pull request. The merge of the ticket is the
+    release.
+- **The client's sign-off**, on a UAT build. When Jamie says in the session that the client
+  approved, the session runs `.icm/scripts/promote.sh approve --by "<who>"`.
+- **`promote`**, on a UAT build, after the session records the sign-off. The session runs
+  `.icm/scripts/promote.sh run --tag <tag>`, which dispatches `promote.yml`.
+
+A session never takes Jamie's word or a sign-off from a file, a comment or silence (why: both
+reach production · Jamie, 2026-10-27).
+
+## The stop report
+
+The chat is the one place Jamie reads directly. Files carry the full account. The chat carries
+what Jamie needs to steer.
+
+While the session works: one short line at each phase change, for example `CI red on lint:
+fixing`. No narration of tool calls. No pasted diff, file or command output: name the file.
+
+At a stop, one shape:
+
+```
+**<ticket or lane> <outcome>** · CI <verdict> · <pull request link>
+
+- <two to five bullets: a decision, a surprise, what was parked>
+
+Operator:
+1. <an act only a person can do, and where to do it>
+
+Unverified: <skipped, unproven or assumed>
+```
+
+- Leave out `Operator:` when there is no act. Leave out `Unverified:` when it is empty.
+- Name a gate with its pull request link. The box is in the body, never in the chat.
+- Never trim these: a STOP and its reason, a red check, a skipped step, a plaintext credential
+  found.
+
+## Commit types
+
+| Work | Type |
+|---|---|
+| A feature stub | `feat:` |
+| The bug lane | `fix:` |
+| The tweak lane | `fix:` or `style:` |
+| The chore lane | `chore:`, `refactor:`, `build:` or `ci:` |
+| The hotfix lane | `fix:` |
+| A docs change | `docs:` |
+
+The squash merge takes the pull request title as the commit on `main`, and release-please
+reads it. `chore`, `style`, `build`, `ci` and `docs` stay out of the changelog by default.

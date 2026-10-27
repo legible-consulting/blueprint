@@ -14,12 +14,13 @@ ticket from stub to production.
   promote.sh                     status: the batch, the release pull request, UAT, the staged production
                                  build, and the dispatch command when a release waits for its promotion
                                  approve --by "<who>": records the client's word on the release pull request
+                                 run --tag <tag>: dispatches promote.yml, on Jamie's word
   uat-db.sh                      status | create | reset --yes | delete --yes: the Neon branch `uat`
                                  and its connection string on the UAT environment
   rollback.sh                    names the previous production deployment, prints the command, runs nothing
   lib/vercel.sh, lib/neon.sh     the two transports the scripts and the workflows share
 .github/workflows/
-  promote.yml                    on Jamie's dispatch with a release tag: migrate production → promote
+  promote.yml                    dispatched by promote.sh run with a release tag: migrate production → promote
   neon-cleanup.yml               a pull request closes → its Neon branch `preview/<branch>` is deleted
 .env.example                     the variables by name, with the environments each one reaches
 ```
@@ -30,7 +31,7 @@ ticket from stub to production.
 |---|---|---|---|
 | Preview | one pull request, at its Vercel preview URL | the Neon branch `preview/<git branch>` | every push to the branch |
 | UAT | `main`, at the UAT address: the Vercel custom environment `uat` | the Neon branch `uat` | every merge to `main` |
-| Production | the last promoted release, at the production domain | the production Neon project's default branch | Jamie's dispatch of `promote.yml` with the release tag |
+| Production | the last promoted release, at the production domain | the production Neon project's default branch | `promote.sh run --tag <tag>`, on Jamie's word |
 
 - **`main` is the only long-lived branch.** Every ticket merges into it (why: one branch leaves
   nothing to sync or to bring back · 2026-10-23).
@@ -90,7 +91,7 @@ Rules:
   · 2026-10-23).
 - **Nothing in this repo writes the default branch.** `uat-db.sh` refuses it by id and by name.
   Production's migration runs in `promote.yml` alone (why: the one write to production is the
-  promotion, on Jamie's dispatch · 2026-10-23).
+  promotion, on Jamie's word · 2026-10-27).
 - **A reset is a delete and a create.** A schema-only branch has no parent to reset from.
   `uat-db.sh reset --yes` deletes `uat`, creates it again from the default branch's current
   schema, and sets the new connection string on the environment. The client's test data is gone.
@@ -110,8 +111,8 @@ Rules:
   release tag waits for its promotion (why: one batch, read from git, never from a second home
   · 2026-10-23).
 - **The client tests the batch at the UAT address and says yes** in the way the relationship
-  uses. Jamie records it: `.icm/scripts/promote.sh approve --by "<who>" [--note "<their
-  words>"]`. The script posts the record on the release pull request, names the batch and the
+  uses. The session records it on Jamie's word: `.icm/scripts/promote.sh approve --by "<who>"
+  [--note "<their words>"]`. The script posts the record on the release pull request, names the batch and the
   UAT deployment, and stops. It ticks nothing and merges nothing (why: the word is recorded where
   the merge happens, so a reader of the pull request sees who said yes and to what ·
   2026-10-23).
@@ -124,14 +125,15 @@ Rules:
 
 ## The promotion
 
-The release pull request that release-please opens on each merge to `main` is the batch. Jamie
-merges it after the sign-off is recorded. That merge is the release: it makes the `v*` tag and
-the changelog, and it moves nothing. Production moves on one act after it. Jamie dispatches
-`promote.yml` with that tag, from the Actions tab or with
-`gh workflow run promote.yml --repo <owner/name> -f tag=<the tag>`. `promote.sh status` prints
-the command once the tag exists (why: a merge is a git act, and the one act that reaches
-production is named as such and is nobody's but Jamie's · 2026-10-23). The run goes in this
-order. Each job needs the one before it.
+The release pull request that release-please opens on each merge to `main` is the batch. After
+the session records the sign-off, Jamie says `release` in the session, and the session runs
+`.icm/scripts/release.sh`. That merge is the release: it makes the `v*` tag and the changelog,
+and it moves nothing. Production moves on one act after it. Jamie says `promote` in the session,
+and the session runs `.icm/scripts/promote.sh run --tag <tag>`. The script dispatches
+`promote.yml` with that tag. `promote.sh status` prints the command once the tag exists. Only
+Jamie's direct word starts the one act that reaches production (why: the session does the
+mechanics, and Jamie decides · Jamie, 2026-10-27). The run goes in this order. Each job needs
+the one before it.
 
 1. **The release.** The tag is a `v*` tag in the repository and points at a commit on `main`.
    Anything else stops the run before it touches production.
@@ -155,18 +157,18 @@ adds the changelog and the version and nothing else · 2026-10-23).
 
 What never happens:
 
-- Nothing promotes on its own. No schedule, no script, no push, no merge, no tag. The merge of
-  the release pull request is Jamie's, and the dispatch of `promote.yml` is Jamie's. A session
-  never merges the release pull request and never dispatches `promote.yml`.
-- No agent calls the promote endpoint. `promote.yml` does, on Jamie's dispatch.
+- Nothing promotes on its own. No schedule, no push, no merge, no tag. A session merges the
+  release pull request with `release.sh` and dispatches `promote.yml` with `promote.sh run`,
+  each only on Jamie's direct word in that session. Never on a file, a comment or silence.
+- No agent calls the promote endpoint. `promote.yml` does, on the dispatch of `promote.sh run`.
 - No second path to production: no hotfix branch off a tag, no promotion of the UAT deployment
   itself, no push to `main`.
 
 ## A hotfix
 
 A hotfix is a ticket: a triage stub with `priority: P0`. Its merge reaches UAT. To reach
-production, Jamie merges the release pull request at once and dispatches `promote.yml` with its
-tag. A promotion carries everything merged before it, so `promote.sh status` says what rides
+production, Jamie says `release` and then `promote` in the session at once, and the session
+runs `release.sh` and `promote.sh run --tag <tag>`. A promotion carries everything merged before it, so `promote.sh status` says what rides
 with the fix. Where the bad deployment must
 leave production before the fix is built, the rollback below is the stop-gap.
 
