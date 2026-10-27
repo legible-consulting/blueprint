@@ -1,5 +1,5 @@
-# check: the blueprint's walk test. Four proof answer sets render on each pull request and on
-# each push to main (three builds and one workspace), the rendered workflows, hooks and scripts are linted, and every
+# check: the blueprint's walk test. Six proof answer sets render on each pull request and on
+# each push to main (five builds and one workspace), the rendered workflows, hooks and scripts are linted, and every
 # functionality question is checked for a default and a help line (CI is truth; never run
 # locally).
 name: check
@@ -39,10 +39,11 @@ jobs:
 
   render:
     # The template renders into a scratch folder with copier, as a kickoff would, once per
-    # proof answer set: every default, every yes (monorepo, release, uat), release no, and a
-    # workspace. A build must carry the ticket convention, the pull request template with both
-    # gate anchors, the three skills, a CLAUDE.md under 80 lines and no BUILD.md. A uat render carries every UAT
-    # file and the others none. A workspace carries the three stage contracts, each with
+    # proof answer set: every default, every yes (monorepo, release, uat, database neon), release
+    # no, a workspace, neon without uat, and mongodb with uat. A build must carry the ticket
+    # convention, the pull request template with both gate anchors, the three skills, a
+    # CLAUDE.md under 80 lines and no BUILD.md. A uat render carries every UAT file and the
+    # others none. A neon render carries every database file and the others none. A workspace carries the three stage contracts, each with
     # Inputs, Process, Outputs and status: stub, one gate, and a ci.yml that asks for the
     # contract check, and no build file. A build carries session-start.sh, registered, and it
     # prints the board of a fixture. A workspace carries neither. actionlint reads the rendered workflows and shellcheck the rendered
@@ -54,16 +55,19 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { name: defaults, workspace: "false", monorepo: "false", release: "true", uat: "false" }
-          - { name: all, workspace: "false", monorepo: "true", release: "true", uat: "true" }
-          - { name: minimal, workspace: "false", monorepo: "false", release: "false", uat: "false" }
-          - { name: workspace, workspace: "true", monorepo: "false", release: "false", uat: "false" }
+          - { name: defaults, workspace: "false", monorepo: "false", release: "true", uat: "false", database: none }
+          - { name: all, workspace: "false", monorepo: "true", release: "true", uat: "true", database: neon }
+          - { name: minimal, workspace: "false", monorepo: "false", release: "false", uat: "false", database: none }
+          - { name: workspace, workspace: "true", monorepo: "false", release: "false", uat: "false", database: none }
+          - { name: neon-nouat, workspace: "false", monorepo: "false", release: "true", uat: "false", database: neon }
+          - { name: mongodb-uat, workspace: "false", monorepo: "false", release: "true", uat: "true", database: mongodb }
     env:
       NAME: ${{ matrix.name }}
       WORKSPACE: ${{ matrix.workspace }}
       MONOREPO: ${{ matrix.monorepo }}
       RELEASE: ${{ matrix.release }}
       UAT: ${{ matrix.uat }}
+      DATABASE: ${{ matrix.database }}
       ACTIONLINT_VERSION: 1.7.12
       ACTIONLINT_SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
     steps:
@@ -83,7 +87,22 @@ jobs:
           copier copy --defaults --vcs-ref HEAD \
             -d slug=zz-proof -d client_name="Zz Proof" -d language=en -d "workspace=${WORKSPACE}" \
             -d "monorepo=${MONOREPO}" -d "release=${RELEASE}" -d "uat=${UAT}" \
+            -d "database=${DATABASE}" -d migrations_path=migrations \
             . "${RUNNER_TEMP}/zz-${NAME}"
+      - name: The migrations_path validator refuses a bad folder
+        if: matrix.name == 'all'
+        # An absolute path, an empty value and a .. segment each stop the render.
+        run: |
+          fail=0
+          for p in /migrations "" a/../b; do
+            if copier copy --defaults --vcs-ref HEAD -d slug=zz-proof -d client_name="Zz Proof" \
+              -d database=neon -d "migrations_path=${p}" . "${RUNNER_TEMP}/zz-bad" >/dev/null 2>&1; then
+              echo "::error::migrations_path '${p}' renders, and the validator must refuse it"
+              fail=1
+            fi
+            rm -rf "${RUNNER_TEMP}/zz-bad"
+          done
+          exit "$fail"
       - name: The rendered settings deny each env file by name
         working-directory: ${{ runner.temp }}/zz-${{ matrix.name }}
         # A glob such as .env.* also matches .env.example, the file the kickoff and the UAT
@@ -165,14 +184,43 @@ jobs:
               || { echo "::error::${NAME}: ${f} frontmatter lacks a description"; fail=1; }
           done
           [ ! -e BUILD.md ] || { echo "::error::${NAME}: BUILD.md must not exist"; fail=1; }
-          uat_files=".icm/uat/CONTEXT.md .icm/scripts/promote.sh .icm/scripts/uat-db.sh .icm/scripts/rollback.sh .icm/scripts/lib/vercel.sh .icm/scripts/lib/neon.sh .github/workflows/promote.yml .github/workflows/neon-cleanup.yml .env.example"
-          for f in $uat_files; do
-            if [ "$UAT" = true ]; then
-              [ -e "$f" ] || { echo "::error::${NAME}: missing $f"; fail=1; }
-            else
-              [ ! -e "$f" ] || { echo "::error::${NAME}: $f must not exist"; fail=1; }
-            fi
+          never() { [ ! -e "$1" ] || { echo "::error::${NAME}: $1 must not exist"; fail=1; }; }
+          # want <yes> <file>: the file exists on yes and is absent on no.
+          want() { if [ "$1" = true ]; then need "$2"; else never "$2"; fi; }
+          neon=false; [ "$DATABASE" = neon ] && neon=true
+          either=false; { [ "$UAT" = true ] || [ "$neon" = true ]; } && either=true
+          for f in .icm/uat/CONTEXT.md .icm/scripts/promote.sh .icm/scripts/rollback.sh .github/workflows/promote.yml; do
+            want "$UAT" "$f"
           done
+          for f in .icm/database/CONTEXT.md .icm/scripts/preview-db.sh .icm/scripts/lib/neon.sh \
+            .github/workflows/preview-db.yml .github/workflows/neon-cleanup.yml; do
+            want "$neon" "$f"
+          done
+          want "$either" .icm/scripts/lib/vercel.sh
+          want "$either" .env.example
+          never .icm/scripts/uat-db.sh
+          [ ! -e .icm/scripts/preview-db.sh ] || [ -x .icm/scripts/preview-db.sh ] \
+            || { echo "::error::${NAME}: .icm/scripts/preview-db.sh is not executable"; fail=1; }
+          grep -qx "database: ${DATABASE}" .copier-answers.yml \
+            || { echo "::error::${NAME}: .copier-answers.yml does not keep database: ${DATABASE}"; fail=1; }
+          if [ "$neon" = true ]; then
+            f=.icm/database/CONTEXT.md
+            for sec in Inputs Process Outputs; do
+              grep -qx "## ${sec}" "$f" || { echo "::error::${NAME}: ${f} lacks '## ${sec}'"; fail=1; }
+            done
+            n="$(wc -l < "$f")"
+            [ "$n" -lt 90 ] || { echo "::error::${NAME}: ${f} has ${n} lines (limit 90)"; fail=1; }
+            grep -qF 'paths: ["migrations/**"]' .github/workflows/preview-db.yml \
+              || { echo "::error::${NAME}: preview-db.yml does not watch migrations/**"; fail=1; }
+            grep -qF '.icm/database/CONTEXT.md' CLAUDE.md || { echo "::error::${NAME}: CLAUDE.md does not route to .icm/database/CONTEXT.md"; fail=1; }
+            grep -qx 'MIGRATE_AT_BUILD=' .env.example || { echo "::error::${NAME}: .env.example does not name MIGRATE_AT_BUILD"; fail=1; }
+            grep -qx 'migrations_path: migrations' .copier-answers.yml \
+              || { echo "::error::${NAME}: .copier-answers.yml does not keep migrations_path"; fail=1; }
+          else
+            ! grep -qF '.icm/database/CONTEXT.md' CLAUDE.md || { echo "::error::${NAME}: CLAUDE.md routes to .icm/database/CONTEXT.md"; fail=1; }
+            [ ! -e .env.example ] || ! grep -q '^NEON_\|^MIGRATE_AT_BUILD' .env.example \
+              || { echo "::error::${NAME}: .env.example names a Neon variable"; fail=1; }
+          fi
           if [ "$UAT" = true ]; then
             grep -qF '.icm/uat/CONTEXT.md' CLAUDE.md || { echo "::error::${NAME}: CLAUDE.md does not route to .icm/uat/CONTEXT.md"; fail=1; }
             grep -qF '## Environments' README.md || { echo "::error::${NAME}: README.md has no Environments table"; fail=1; }
