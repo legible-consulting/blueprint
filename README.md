@@ -3,8 +3,7 @@
 Legible Consulting's method, public, in three parts: one copier template, the conventions every
 rendered repo follows, and the workshop kit. The template renders a client build, or a client's
 ICM workspace, from its answers. The questions are the bank in `copier.yml`: the slug, the client's name, the
-language, `workspace`, then for a build `monorepo`, `release`, `uat`, `database` and
-`migrations_path`.
+language, `workspace`, then for a build `monorepo`, `release`, `uat` and `database`.
 
 ```bash
 copier copy gh:legible-consulting/blueprint ~/Desktop/legible-consulting/projects/<slug>
@@ -52,7 +51,6 @@ Every build carries these files, whatever its answers:
 | `release` | `ci.yml` gains the `release` job: `.github`'s `release.yml` (release-please) on each push to `main`. `CLAUDE.md` says the release is Jamie's word `release`, and the session runs `release.sh`. No: production follows `main`, and the merge is the release |
 | `uat` (asked when `release` is yes) | the UAT shape below |
 | `database` (`none`, `neon`, `mongodb`, `other`) | `neon` renders the database shape below. Any other answer renders no database file, and `.copier-answers.yml` keeps the answer |
-| `migrations_path` (asked on `neon`, default `migrations`) | the folder `preview-db.yml` watches |
 
 ### Written once
 
@@ -91,7 +89,7 @@ licence is MIT, and the copy keeps its `LICENSE`. The blueprint edits no file in
 | `.icm/uat/CONTEXT.md` | the whole UAT contract: the three environments, the database, the batch, the sign-off, the promotion, the rollback, the setup acts and the names |
 | `.icm/scripts/promote.sh` | `status` reads the batch, the release pull request, `ci`, the UAT deployment, the staged production build, and prints the dispatch command when a release waits. `approve --by "<who>"` records the client's word on the release pull request. `run --tag <tag>` dispatches `promote.yml`, on Jamie's word |
 | `.icm/scripts/rollback.sh` | names the previous production deployment and prints the rollback command. Runs nothing |
-| `.icm/scripts/lib/vercel.sh` | the Vercel transport, also on `neon`. A token never reaches a command line |
+| `.icm/scripts/lib/vercel.sh` | the Vercel transport of the UAT scripts and `promote.yml`. A token never reaches a command line |
 | `.github/workflows/promote.yml` | dispatched by `promote.sh run` with a release tag: migrate production → promote the staged build → read production once. No push, merge or tag starts it |
 | `.env.example` | the names, with the environments each one reaches. Written once. Also on `neon` |
 
@@ -108,18 +106,21 @@ A build that answered `neon` carries the database shape. Any other answer render
 
 | File | Does |
 |---|---|
-| `.icm/database/CONTEXT.md` | the database contract: the base, a preview branch for a migration, the migration at build, the setup acts and the names |
-| `.icm/scripts/preview-db.sh` | `create`, `delete`, `status` of `preview/<git branch>` and its three Preview variables, scoped to the git branch |
-| `.icm/scripts/vercel-build.sh` | the `vercel-build` of `package.json`: migrate, verify, then build, when the deployment owns the base. `package.json` calls it with one line that never changes |
-| `.icm/scripts/lib/neon.sh` | the Neon transport. A token never reaches a command line. The base is never written |
-| `.github/workflows/preview-db.yml` | a pull request changes `<migrations_path>/**` → `preview-db.sh create` |
-| `.github/workflows/neon-cleanup.yml` | a pull request closes → `preview-db.sh delete` |
+| `.icm/database/CONTEXT.md` | the database contract: the Neon projects, a branch for each preview, the migration at build, the setup acts and the names |
+| `.icm/scripts/vercel-build.sh` | the `vercel-build` of `package.json`: migrate, verify, then build. With UAT, production only builds. `package.json` calls it with one line that never changes |
 
-The shape in four sentences. The base is UAT's database with UAT, production's without. Every
-preview reads the base. A pull request that changes a migration gets a Neon branch cut from the
-base, with its data. A deployment migrates at build in two cases.
-`VERCEL_TARGET_ENV` names the environment that owns the base: `uat` with UAT, `production`
-without UAT. Or `preview-db.sh` set `MIGRATE_AT_BUILD=1` on its preview branch.
+The shape in four sentences. Isolation is by Neon project: with UAT, only production reads
+`<slug>`, and each other deployment reads `uat-<slug>`. The Neon integration makes a branch for
+each preview, before its build, and deletes it with the git branch. Every build migrates its own
+database, except production with UAT, which `promote.yml` migrates after the sign-off.
+`db:migrate` holds a Postgres advisory lock, so two builds never migrate one database at once.
+
+### Setup acts
+
+A UAT or Neon build carries `.icm/intake/setup/`: one stub for each act that only a person can
+do, written by copier from the answers. A new answer or a new tag adds its acts at the next
+`copier update`. A stub that a person moved to `setup/_done/` is not written again.
+`session-start.sh` prints the open acts at each session start.
 
 ### The workspace
 

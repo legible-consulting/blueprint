@@ -48,6 +48,7 @@ esac
 epic="${ref%%/*}"
 slug="${ref##*/}"
 [ "$epic" != _done ] || { echo "the stub is already in _done/" >&2; exit 2; }
+[ "$epic" != setup ] || { echo "a setup stub is an act for a person, not a ticket: it gets no branch (.icm/intake/CONTEXT.md § The setup stub)" >&2; exit 2; }
 
 root="$(git rev-parse --show-toplevel)"
 cd "$root"

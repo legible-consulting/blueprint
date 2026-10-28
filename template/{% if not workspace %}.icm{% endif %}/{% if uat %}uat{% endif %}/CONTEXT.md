@@ -29,7 +29,7 @@ ticket from stub to production.
 
 | Environment | Serves | Database | Moves on |
 |---|---|---|---|
-| Preview | one pull request, at its Vercel preview URL | the UAT database, or the pull request's own as the database rule says | every push to the branch |
+| Preview | one pull request, at its Vercel preview URL | its own database, as the database rule says | every push to the branch |
 | UAT | `main`, at the UAT address: the Vercel custom environment `uat` | the UAT database | every merge to `main` |
 | Production | the last promoted release, at the production domain | production's database | `promote.sh run --tag <tag>`, on Jamie's word |
 
@@ -64,9 +64,9 @@ ticket from stub to production.
 ## The database
 
 The UAT environment reads a UAT database, never production's. With `database: neon` in
-`.copier-answers.yml`, the UAT database is the default branch of a second Neon project, the
-base. `.icm/database/CONTEXT.md` holds the rest: the base, the preview branches, the
-migration at build, the setup and the names. With any other answer, the database is the
+`.copier-answers.yml`, the UAT database is the default branch of the Neon project
+`uat-<slug>`. `.icm/database/CONTEXT.md` holds the rest: the preview branches, the migration
+at build, the setup and the names. With any other answer, the database is the
 build's own, the build provides the UAT database, and this contract says nothing more about it.
 Production's migration is the promotion's, below (why: the client's test data stays apart from
 production's rows. The one write to production is the promotion, on Jamie's word ·
@@ -157,23 +157,23 @@ rollback loses the client's rows. A code rollback loses nothing · 2026-10-23).
 
 ## Setup, once
 
-Jamie performs these by hand, once, before the first merge that relies on them. `promote.sh
-status` marks the ones it can read.
+The person acts are setup stubs in `.icm/intake/setup/`. Copier writes one for each act that
+the answers need, and a new answer or a new tag adds its acts. A stub is open until a session
+moves it to `setup/_done/` on the person's word (`.icm/intake/CONTEXT.md` § The setup stub).
+`promote.sh status` marks the acts it can read. The acts of this contract:
 
-1. Vercel → each project of an app that the client tests → Settings → Environments: a custom
-   environment with the slug `uat`, branch tracking `main`. Attach the domain `uat.<the
-   production domain>` to it and add the CNAME at the registrar. A custom environment needs a
-   Pro team. Each project of the build keeps its git link to this repository.
-2. Vercel → each UAT project → Settings → Environments → Production: "Auto-assign Custom
-   Production Domains" off.
-3. The database: with `database: neon`, `.icm/database/CONTEXT.md` § Setup, once. With any
-   other answer, the build's own setup, with a UAT database apart from production's.
-4. GitHub → the repository → Settings → Secrets and variables → Actions. Secrets:
-   `VERCEL_TOKEN`, and `DATABASE_URL` (production's direct connection string, read by the
-   migration in `promote.yml` only) when `package.json` names `db:migrate`. Variable:
-   `VERCEL_TEAM`. No variable names a project.
-5. The application's own variables on the `uat` environment of each UAT project, from
-   `.env.example`: sandbox keys, never live ones.
+1. `vercel-uat-environment`: on each Vercel project of an app that the client tests, the
+   custom environment `uat` from `main`, its domain, and production's domains not assigned
+   by a merge.
+2. `actions-vercel`: the Actions secret `VERCEL_TOKEN` and the variable `VERCEL_TEAM`. No
+   variable names a project.
+3. `actions-production-database` (with a database): the Actions secret `DATABASE_URL`,
+   production's direct connection string, read by the migration in `promote.yml` only.
+4. `uat-variables`: the application's own variables on `uat`, from `.env.example`. Sandbox
+   keys, never live ones.
+
+The database acts are in `.icm/database/CONTEXT.md` § Setup, once, with `database: neon`. With
+any other answer, the build's own setup gives UAT a database apart from production's.
 
 The names, in one place:
 
