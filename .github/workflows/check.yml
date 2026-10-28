@@ -712,7 +712,9 @@ jobs:
       - name: The git-writes guard asks before a REST merge or ref delete
         working-directory: ${{ runner.temp }}/zz-${{ matrix.name }}
         # The hook reads the command that the session types. merge.sh calls the same REST
-        # paths, but the hook does not see them, so the script stays allowed.
+        # paths, but the hook does not see them, so the script stays allowed. A PATCH on a
+        # ref and a POST on /merges also ask, and a /merges call with a field and no method
+        # asks, because gh api sends it as a POST.
         run: |
           fail=0
           decide() {
@@ -724,12 +726,20 @@ jobs:
             'gh api -X DELETE repos/o/r/git/refs/heads/x' \
             'gh api --method=PUT "repos/o/r/pulls/7/merge" -f merge_method=squash' \
             'gh api repos/o/r/pulls/7/merge -f sha=abc -XPUT' \
-            'cd x && gh api --method delete repos/o/r/git/refs/heads/x'; do
+            'cd x && gh api --method delete repos/o/r/git/refs/heads/x' \
+            'gh api -X PATCH repos/o/r/git/refs/heads/x -F sha=abc -F force=true' \
+            'gh api repos/o/r/git/refs/heads/x -F sha=abc --method=patch' \
+            'gh api -X POST repos/o/r/merges -f base=main -f head=x' \
+            'gh api "repos/o/r/merges" -f base=main -f head=x -XPOST' \
+            'gh api repos/o/r/merges -f base=main -f head=x' \
+            'gh api -X GET repos/o/r/pulls && gh api repos/o/r/merges --field base=main'; do
             [ "$(decide "$c")" = ask ] || { echo "::error::${NAME}: no ask for '${c}'"; fail=1; }
           done
           for c in '.icm/scripts/merge.sh 7' 'gh api repos/o/r/pulls/7' \
             'gh api repos/o/r/pulls/7/merge' 'gh api -X GET repos/o/r/git/refs/heads/x' \
-            'gh api -X PUT repos/o/r/merges'; do
+            'gh api -X PUT repos/o/r/merges' 'gh api repos/o/r/git/refs/heads/x' \
+            'gh api -X GET repos/o/r/merges' 'gh api repos/o/r/merges' \
+            'gh api -X GET repos/o/r/merges -f per_page=5'; do
             [ -z "$(decide "$c")" ] || { echo "::error::${NAME}: an ask for '${c}'"; fail=1; }
           done
           exit "$fail"
