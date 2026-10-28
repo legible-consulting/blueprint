@@ -294,8 +294,8 @@ word. Without it, they refuse (why: a script does the same thing every time and 
 turn · 2026-10-21). The judgement stays with Jamie.
 
 The scripts and the session reach GitHub through the REST API only: `gh api`, `gh run` and
-`gh workflow run`. Do not use `gh pr`, `gh release list` or `gh repo view`. They use GraphQL, and
-a Claude Code cloud session gets HTTP 403 on GraphQL (why: a cloud session could not merge after
+`gh workflow run`. Do not use `gh pr`, `gh release list` or `gh repo view`. They use GraphQL.
+A Claude Code cloud session gets HTTP 403 on GraphQL (why: a cloud session could not merge after
 the tick · 2026-10-28). The `pr-conventions` skill names the REST call for each step.
 
 0. **Resume.** `build <slug>`, or a slug with a branch, is a started ticket. Check out the
