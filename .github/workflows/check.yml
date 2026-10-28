@@ -57,11 +57,12 @@ jobs:
     # hooks and scripts, so a template error fails here and not in a client repo. In a build,
     # new-run.sh --dry-run runs on a fixture stub and must leave the tree as it was, merge.sh
     # keeps each refusal against a fake gh that serves REST only, and the router passes its
-    # fixture test. In `all`, a monorepo with UAT and Neon, rollback.sh and preview-db.sh run
-    # against a fake Vercel and Neon API with two UAT projects, and act on those two only. No
-    # rendered file names VERCEL_PROJECT or NEON_PROJECT_ID. neon-nouat answers db/migrations, so
-    # the proof shows that the migrations_path answer gets to preview-db.yml, and not only the
-    # default.
+    # fixture test. The git-writes guard asks before a REST merge or ref delete, and stays
+    # silent for merge.sh and a read. In `all`, a monorepo with UAT and Neon, rollback.sh and
+    # preview-db.sh run against a fake Vercel and Neon API with two UAT projects, and act on those
+    # two only. No rendered file names VERCEL_PROJECT or NEON_PROJECT_ID. neon-nouat answers
+    # db/migrations, so the proof shows that the migrations_path answer gets to preview-db.yml,
+    # and not only the default.
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -686,6 +687,30 @@ jobs:
         # The test builds its own fixture trees, so the rendered build's .icm/intake/ does not
         # count. Each hook call must take less than 100 ms.
         run: bash .claude/hooks/route-request.test.sh
+      - name: The git-writes guard asks before a REST merge or ref delete
+        working-directory: ${{ runner.temp }}/zz-${{ matrix.name }}
+        # The hook reads the command that the session types. merge.sh calls the same REST
+        # paths, but the hook does not see them, so the script stays allowed.
+        run: |
+          fail=0
+          decide() {
+            jq -nc --arg c "$1" '{tool_input: {command: $c}, cwd: "."}' \
+              | env -u CLAUDE_PROJECT_DIR bash .claude/hooks/confirm-git-writes.sh \
+              | jq -r '.hookSpecificOutput.permissionDecision // empty'
+          }
+          for c in 'gh api -X PUT repos/o/r/pulls/7/merge' \
+            'gh api -X DELETE repos/o/r/git/refs/heads/x' \
+            'gh api --method=PUT "repos/o/r/pulls/7/merge" -f merge_method=squash' \
+            'gh api repos/o/r/pulls/7/merge -f sha=abc -XPUT' \
+            'cd x && gh api --method delete repos/o/r/git/refs/heads/x'; do
+            [ "$(decide "$c")" = ask ] || { echo "::error::${NAME}: no ask for '${c}'"; fail=1; }
+          done
+          for c in '.icm/scripts/merge.sh 7' 'gh api repos/o/r/pulls/7' \
+            'gh api repos/o/r/pulls/7/merge' 'gh api -X GET repos/o/r/git/refs/heads/x' \
+            'gh api -X PUT repos/o/r/merges'; do
+            [ -z "$(decide "$c")" ] || { echo "::error::${NAME}: an ask for '${c}'"; fail=1; }
+          done
+          exit "$fail"
       - name: actionlint on the rendered workflows
         working-directory: ${{ runner.temp }}/zz-${{ matrix.name }}
         # The rendered folder is not a git repo, so the files are named instead of found.
