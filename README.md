@@ -110,6 +110,7 @@ A build that answered `neon` carries the database shape. Any other answer render
 |---|---|
 | `.icm/database/CONTEXT.md` | the database contract: the base, a preview branch for a migration, the migration at build, the setup acts and the names |
 | `.icm/scripts/preview-db.sh` | `create`, `delete`, `status` of `preview/<git branch>` and its three Preview variables, scoped to the git branch |
+| `.icm/scripts/vercel-build.sh` | the `vercel-build` of `package.json`: migrate, verify, then build, when the deployment owns the base. `package.json` calls it with one line that never changes |
 | `.icm/scripts/lib/neon.sh` | the Neon transport. A token never reaches a command line. The base is never written |
 | `.github/workflows/preview-db.yml` | a pull request changes `<migrations_path>/**` → `preview-db.sh create` |
 | `.github/workflows/neon-cleanup.yml` | a pull request closes → `preview-db.sh delete` |

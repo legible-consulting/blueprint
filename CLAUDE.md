@@ -10,4 +10,7 @@ line. Test a change by rendering into a scratch folder with `copier copy --vcs-r
 /tmp/zz`, never by editing a client repo by hand. `check.yml` renders the proof answer sets on
 each pull request and on push to `main`. It lints the rendered workflows, hooks and scripts,
 runs the router's fixture test in each build, and proves `copier update` from an older tag to
-`HEAD`. Technical text in Simplified Technical English.
+`HEAD`. A rendered repo conforms only through `copier update`. A rule that a file of the
+repo's own must follow lives in a blueprint file that the repo's file calls, never in a line
+that each repo copies (why: a copied line changes only by hand in each repo, so a new tag does
+not reach it · Jamie, 2026-10-28). Technical text in Simplified Technical English.
