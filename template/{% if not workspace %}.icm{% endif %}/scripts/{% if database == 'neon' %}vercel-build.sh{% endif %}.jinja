@@ -19,7 +19,8 @@ target="${VERCEL_TARGET_ENV:-}"
 }
 # The package manager: from npm_config_user_agent under a package script. A buildCommand runs
 # with no package manager, so the nearest lockfile at or above this folder decides.
-pm="${npm_config_user_agent%%/*}"
+agent="${npm_config_user_agent:-}"
+pm="${agent%%/*}"
 dir="$PWD"
 while [ -z "$pm" ]; do
   if [ -e "${dir}/pnpm-lock.yaml" ]; then pm=pnpm
