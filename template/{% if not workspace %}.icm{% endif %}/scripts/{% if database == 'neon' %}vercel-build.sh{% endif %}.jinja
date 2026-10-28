@@ -4,6 +4,8 @@
 # command. package.json names it once and its line never changes:
 #   "vercel-build": "bash .icm/scripts/vercel-build.sh next build"
 # (from a package below the root: "bash ../.icm/scripts/vercel-build.sh next build").
+# A monorepo calls it from each app's vercel.json, and it migrates before turbo starts:
+#   "buildCommand": "bash ../../.icm/scripts/vercel-build.sh turbo run build"
 # The rule is .icm/database/CONTEXT.md § The migration rule. The blueprint owns this file:
 # copier update changes it.
 set -euo pipefail
@@ -15,11 +17,22 @@ target="${VERCEL_TARGET_ENV:-}"
   echo "vercel-build.sh: VERCEL_TARGET_ENV is not set. Turn on \"Automatically expose System Environment Variables\" in the Vercel project" >&2
   exit 1
 }
-case "${npm_config_user_agent:-}" in
-  pnpm/*) run=(pnpm run) ;;
-  yarn/*) run=(yarn run) ;;
-  bun/*)  run=(bun run) ;;
-  *)      run=(npm run) ;;
+# The package manager: from npm_config_user_agent under a package script. A buildCommand runs
+# with no package manager, so the nearest lockfile at or above this folder decides.
+agent="${npm_config_user_agent:-}"
+pm="${agent%%/*}"
+dir="$PWD"
+while [ -z "$pm" ]; do
+  if [ -e "${dir}/pnpm-lock.yaml" ]; then pm=pnpm
+  elif [ -e "${dir}/yarn.lock" ]; then pm=yarn
+  elif [ -e "${dir}/bun.lock" ] || [ -e "${dir}/bun.lockb" ]; then pm=bun
+  elif [ -e "${dir}/package-lock.json" ] || [ "$dir" = / ]; then pm=npm
+  else dir="$(dirname "$dir")"
+  fi
+done
+case "$pm" in
+  pnpm|yarn|bun) run=("$pm" run) ;;
+  *)             run=(npm run) ;;
 esac
 
 {% if uat -%}

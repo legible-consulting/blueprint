@@ -107,7 +107,7 @@ A build that answered `neon` carries the database shape. Any other answer render
 | File | Does |
 |---|---|
 | `.icm/database/CONTEXT.md` | the database contract: the Neon projects, a branch for each preview, the migration at build, the setup acts and the names |
-| `.icm/scripts/vercel-build.sh` | the `vercel-build` of `package.json`: migrate, verify, then build. With UAT, production only builds. `package.json` calls it with one line that never changes |
+| `.icm/scripts/vercel-build.sh` | the `vercel-build` of `package.json`: migrate, verify, then build. With UAT, production only builds. `package.json` calls it with one line that never changes. In a monorepo, each app's `vercel.json` `buildCommand` calls it before `turbo run build` |
 
 The shape in four sentences. Isolation is by Neon project: with UAT, only production reads
 `<slug>`, and each other deployment reads `uat-<slug>`. The Neon integration makes a branch for

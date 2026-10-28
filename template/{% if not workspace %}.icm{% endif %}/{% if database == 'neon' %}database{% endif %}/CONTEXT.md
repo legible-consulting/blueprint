@@ -40,16 +40,20 @@ that `copier update` changes, so a new tag reaches every build · Jamie, 2026-10
   With UAT it skips the migration when `VERCEL_TARGET_ENV` is `production`, because
   production's build runs at the merge to `main`, before the sign-off. `promote.yml` migrates
   production. Without UAT, every build migrates, production too.
-- Vercel sets `VERCEL_TARGET_ENV` at build: `preview`, `uat` or `production`. No person sets
-  it. The script stops when it is not set.
+- Vercel sets `VERCEL_TARGET_ENV` at build, and no person sets it. Without it, the script stops.
 - The script gives `db:migrate` and `db:verify` `DATABASE_URL_UNPOOLED` as `DATABASE_URL` when
   it has a value: a migration needs a direct connection.
 - **`db:migrate` holds a Postgres advisory lock** for the whole run, and releases it at the
   end. Two builds can migrate one database at the same time: two apps of a monorepo on `uat`,
   or two pushes to one branch. The lock makes the second run wait, then find nothing to apply
   (why: the migration tool does not lock by itself · Jamie, 2026-10-28).
-- A package below the root calls `../.icm/scripts/vercel-build.sh`. Each app that reads the
-  database calls it, so each preview branch is migrated.
+- **A monorepo calls the script from each app's `vercel.json`.** Vercel runs `turbo run build`
+  there, not `vercel-build`. Each app that reads the database names `db:migrate` and
+  `db:verify` in its own `package.json`, and its `vercel.json` has the line
+  `"buildCommand": "bash ../../.icm/scripts/vercel-build.sh turbo run build"`. The script
+  migrates before turbo starts, so `turbo.json` names no variable for it (why: turbo's strict
+  mode removes `DATABASE_URL` from a task that `turbo.json` does not name, and a cache hit
+  skips the task · 2026-10-28). A package one level below the root calls `../.icm/scripts/`.
 - A migration at build runs while the previous deployment still serves. So a migration must be
   forward-compatible with the code it replaces.
 
@@ -75,8 +79,8 @@ word (`.icm/intake/CONTEXT.md` § The setup stub). The acts of this contract:
 4. `github-delete-head-branches`: GitHub deletes the head branch after a merge, so the
    integration deletes its Neon branch.
 
-The session's own setup: `package.json` names `db:migrate` with the lock, `db:verify`, and the
-`vercel-build` line above.
+The session's own setup: `package.json` names `db:migrate` with the lock and `db:verify`, and
+the `vercel-build` line above. In a monorepo, each app's `vercel.json` has the `buildCommand`.
 
 | Name | Holds | Where |
 |---|---|---|

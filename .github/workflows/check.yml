@@ -63,7 +63,8 @@ jobs:
     # against a fake Vercel API with two UAT projects, and acts on those two only, and a copier
     # update keeps a done setup stub done. No rendered file names VERCEL_PROJECT,
     # NEON_PROJECT_ID, NEON_API_KEY or MIGRATE_AT_BUILD. In each neon build, vercel-build.sh
-    # migrates on the right environments against a fake npm.
+    # migrates on the right environments against a fake npm. In a monorepo with Neon, the
+    # contract's buildCommand migrates before turbo starts, in a fixture Turborepo.
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -702,6 +703,77 @@ jobs:
           else
             build 'production without UAT' 0 2 VERCEL_TARGET_ENV=production "${urls[@]}"
           fi
+          exit "$fail"
+      - name: A monorepo migrates from vercel.json, before turbo starts
+        if: matrix.monorepo == 'true' && matrix.database == 'neon'
+        working-directory: ${{ runner.temp }}/zz-${{ matrix.name }}
+        # The buildCommand line of .icm/database/CONTEXT.md runs in apps/web of a fixture
+        # Turborepo whose turbo.json names no variable, with the root node_modules/.bin on PATH,
+        # as on Vercel. The script migrates and verifies with the direct string, then turbo
+        # builds. Strict mode keeps DATABASE_URL from the build task, so the build logs none.
+        # With UAT, production only builds. A buildCommand has no npm_config_user_agent, so with
+        # a pnpm lockfile at the root the script calls pnpm.
+        env:
+          TURBO_VERSION: 2.9.18
+        run: |
+          fail=0
+          f=.icm/database/CONTEXT.md
+          cmd="$(sed -n 's/.*`"buildCommand": "\(.*\)"`.*/\1/p' "$f")"
+          [ -n "$cmd" ] && [ "$(wc -l <<<"$cmd")" -eq 1 ] \
+            || { echo "::error::${NAME}: ${f} does not have one buildCommand line"; exit 1; }
+          echo "buildCommand: ${cmd}"
+          mono="${RUNNER_TEMP}/mono"
+          mkdir -p "${mono}/.icm/scripts" "${mono}/apps/web"
+          cp .icm/scripts/vercel-build.sh "${mono}/.icm/scripts/"
+          printf '{"name":"mono","private":true,"workspaces":["apps/*"],"packageManager":"npm@%s"}\n' \
+            "$(npm --version)" > "${mono}/package.json"
+          echo '{"tasks":{"build":{"outputs":[]}}}' > "${mono}/turbo.json"
+          cat > "${mono}/apps/web/package.json" <<'JSON'
+          {
+            "name": "web",
+            "private": true,
+            "scripts": {
+              "db:migrate": "echo \"migrate ${DATABASE_URL:-none}\" >> ../../log",
+              "db:verify": "echo \"verify ${DATABASE_URL:-none}\" >> ../../log",
+              "build": "echo \"build ${DATABASE_URL:-none}\" >> ../../log"
+            }
+          }
+          JSON
+          (cd "$mono" && npm install --save-dev --no-audit --no-fund "turbo@${TURBO_VERSION}" >/dev/null)
+          # build <label> <exit> <log> <env...>: run the buildCommand in apps/web with the env.
+          build() {
+            local label="$1" want="$2" log="$3" code=0 out got
+            shift 3
+            rm -f "${mono}/log"
+            out="$(cd "${mono}/apps/web" && env -u VERCEL_TARGET_ENV -u DATABASE_URL -u DATABASE_URL_UNPOOLED \
+              -u npm_config_user_agent PATH="${mono}/node_modules/.bin:${PATH}" TURBO_FORCE=true \
+              TURBO_TELEMETRY_DISABLED=1 "$@" bash -c "$cmd" 2>&1)" || code=$?
+            got="$(cat "${mono}/log" 2>/dev/null || true)"
+            [ "$code" -eq "$want" ] || { echo "::error::${NAME}: ${label}: exit ${code}, not ${want}"; echo "$out"; fail=1; }
+            [ "$got" = "$log" ] || { echo "::error::${NAME}: ${label}: log '${got//$'\n'/; }', not '${log//$'\n'/; }'"; echo "$out"; fail=1; }
+          }
+          urls=(DATABASE_URL=pooled DATABASE_URL_UNPOOLED=direct)
+          migrated=$'migrate direct\nverify direct\nbuild none'
+          build 'no VERCEL_TARGET_ENV' 1 '' "${urls[@]}"
+          build 'preview' 0 "$migrated" VERCEL_TARGET_ENV=preview "${urls[@]}"
+          if [ "$UAT" = true ]; then
+            build 'uat' 0 "$migrated" VERCEL_TARGET_ENV=uat "${urls[@]}"
+            build 'production with UAT' 0 'build none' VERCEL_TARGET_ENV=production "${urls[@]}"
+          else
+            build 'production without UAT' 0 "$migrated" VERCEL_TARGET_ENV=production "${urls[@]}"
+          fi
+          # The pnpm lockfile decides the package manager. A fake pnpm logs each call.
+          pn="${RUNNER_TEMP}/mono-pnpm"
+          mkdir -p "${pn}/.icm/scripts" "${pn}/apps/web" "${pn}/bin"
+          cp .icm/scripts/vercel-build.sh "${pn}/.icm/scripts/"
+          : > "${pn}/pnpm-lock.yaml"
+          printf '#!/usr/bin/env bash\necho "pnpm $*" >> "%s/log"\n' "$pn" > "${pn}/bin/pnpm"
+          chmod +x "${pn}/bin/pnpm"
+          (cd "${pn}/apps/web" && env -u npm_config_user_agent PATH="${pn}/bin:${PATH}" VERCEL_TARGET_ENV=preview \
+            DATABASE_URL=pooled bash ../../.icm/scripts/vercel-build.sh true) \
+            || { echo "::error::${NAME}: the pnpm build failed"; fail=1; }
+          [ "$(cat "${pn}/log" 2>/dev/null)" = $'pnpm run db:migrate\npnpm run db:verify' ] \
+            || { echo "::error::${NAME}: with a pnpm lockfile, the script does not call pnpm"; cat "${pn}/log"; fail=1; }
           exit "$fail"
       - name: The router passes its fixture test
         if: matrix.workspace == 'false'
