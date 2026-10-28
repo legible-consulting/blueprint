@@ -25,11 +25,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
+      # No variable names a project. preview-db.sh finds the Neon project of the base by its name
+      # and the Vercel projects by their git link to this repository.
       NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
-      NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       VERCEL_TEAM: ${{ vars.VERCEL_TEAM }}
-      VERCEL_PROJECT: ${{ vars.VERCEL_PROJECT || github.event.repository.name }}
+      GH_REPO: ${{ github.repository }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

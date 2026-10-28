@@ -1,16 +1,21 @@
 #!/usr/bin/env bash
 # lib/neon.sh — the Neon transport preview-db.sh uses. Sourced, not run.
 #
-# Reads from the environment: NEON_API_KEY and NEON_PROJECT_ID (both required before any call).
-# The key never reaches a command line: curl reads its configuration from a file only this
-# process can read. The project's default branch is the base: UAT's database with UAT,
-# production's without. No function here writes it or deletes it, whatever a caller asks, and a
-# delete refuses every name outside preview/*. A connection string is printed by one function
-# only, neon_connection_uri, and a caller writes it to a file, never to a terminal. The contract
-# is .icm/database/CONTEXT.md.
+# Reads from the environment: NEON_API_KEY (required before any call). The key never reaches a
+# command line: curl reads its configuration from a file only this process can read. No variable
+# names the Neon project. The base's project has a name made from .copier-answers.yml at the repo
+# root: `uat-<slug>` when `uat` is true, `<slug>` when it is not. neon_require finds that project
+# by its exact name and stops when no project or more than one project has the name. The
+# project's default branch is the base: UAT's database with UAT, production's without. No
+# function here writes it or deletes it, whatever a caller asks, and a delete refuses every name
+# outside preview/*. A connection string is printed by one function only, neon_connection_uri,
+# and a caller writes it to a file, never to a terminal. The contract is .icm/database/CONTEXT.md.
 #
 # Functions (the caller defines `die`, or the default below applies):
-#   neon_require "<why>"                     stop now when the key or the project id is missing.
+#   neon_require "<why>"                     stop now when the key is missing. Then find the base's project.
+#   neon_answer <key>                        the value of <key> in .copier-answers.yml, or nothing.
+#   neon_project_name                        the name of the base's project.
+#   neon_project_id                          the id of the base's project (neon_require finds it).
 #   neon_call <METHOD> <path> [<file>]       one request. Prints the body, then the HTTP code on its own line.
 #   neon_get <path>                          GET. Prints the body. Dies on a code outside 2xx.
 #   neon_branches                            the project's branches as a JSON array.
@@ -28,11 +33,39 @@ if ! declare -F die >/dev/null 2>&1; then
   die() { echo "error: $*" >&2; exit 1; }
 fi
 
+_neon_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+
 neon_require() { # <why>
+  local name found
   [ -n "${NEON_API_KEY:-}" ] || die "NEON_API_KEY is not set: $1 needs it"
-  [ -n "${NEON_PROJECT_ID:-}" ] || die "NEON_PROJECT_ID is not set: $1 needs it"
   command -v curl >/dev/null 2>&1 || die "curl is not installed"
   command -v jq >/dev/null 2>&1 || die "jq is not installed"
+  name="$(neon_project_name)" || exit 1
+  found="$(neon_get "/projects?search=$(jq -rn --arg n "$name" '$n | @uri')&limit=100")" || exit 1
+  found="$(printf '%s' "$found" | jq -r --arg n "$name" '[.projects[] | select(.name == $n) | .id] | join(" ")')"
+  case "$found" in
+    "") die "no Neon project has the name '$name': read .icm/database/CONTEXT.md § Setup, once" ;;
+    *" "*) die "more than one Neon project has the name '$name' ($found): keep one" ;;
+  esac
+  _neon_project_id="$found"
+}
+
+neon_answer() { # <key>
+  local f="${_neon_root}/.copier-answers.yml"
+  [ -f "$f" ] || return 0
+  sed -nE "s/^$1:[[:space:]]*['\"]?([^'\"]*)['\"]?[[:space:]]*\$/\1/p" "$f" | head -n1
+}
+
+neon_project_name() {
+  local slug
+  slug="$(neon_answer slug)"
+  [ -n "$slug" ] || die ".copier-answers.yml names no slug: the Neon project of the base cannot be found"
+  if [ "$(neon_answer uat)" = true ]; then printf 'uat-%s' "$slug"; else printf '%s' "$slug"; fi
+}
+
+neon_project_id() {
+  [ -n "${_neon_project_id:-}" ] || die "the Neon project is not found yet: the caller calls neon_require first"
+  printf '%s' "$_neon_project_id"
 }
 
 neon_call() { # <METHOD> <path> [<json file>]
@@ -66,10 +99,10 @@ neon_get() { # <path>
   esac
 }
 
-neon_branches() { neon_get "/projects/${NEON_PROJECT_ID}/branches" | jq -c '.branches'; }
+neon_branches() { neon_get "/projects/$(neon_project_id)/branches" | jq -c '.branches'; }
 neon_default_branch() { neon_branches | jq -c '[.[] | select(.default == true)] | first // empty'; }
 neon_branch() { neon_branches | jq -c --arg n "$1" '[.[] | select(.name == $n)] | first // empty'; }
-neon_branch_state() { neon_get "/projects/${NEON_PROJECT_ID}/branches/$1" | jq -r '.branch.current_state // empty'; }
+neon_branch_state() { neon_get "/projects/$(neon_project_id)/branches/$1" | jq -r '.branch.current_state // empty'; }
 
 neon_wait_ready() { # <id> [<seconds>]
   local deadline=$((SECONDS + ${2:-180})) state
@@ -82,7 +115,7 @@ neon_wait_ready() { # <id> [<seconds>]
 }
 
 neon_branch_database() { # <id>
-  neon_get "/projects/${NEON_PROJECT_ID}/branches/$1/databases" \
+  neon_get "/projects/$(neon_project_id)/branches/$1/databases" \
     | jq -r '.databases | first | "\(.name)\t\(.owner_name)"'
 }
 
@@ -91,7 +124,7 @@ neon_create_branch() { # <name> <parent id>
   body="$(mktemp)"
   jq -n --arg n "$1" --arg p "$2" \
     '{branch: {name: $n, parent_id: $p}, endpoints: [{type: "read_write"}]}' > "$body"
-  resp="$(neon_call POST "/projects/${NEON_PROJECT_ID}/branches" "$body")" || { rm -f "$body"; die "POST branches: curl failed"; }
+  resp="$(neon_call POST "/projects/$(neon_project_id)/branches" "$body")" || { rm -f "$body"; die "POST branches: curl failed"; }
   rm -f "$body"
   code="$(neon_code "$resp")"
   case "$code" in
@@ -108,7 +141,7 @@ neon_delete_branch() { # <id> <name>
   esac
   default_id="$(neon_default_branch | jq -r '.id // empty')"
   [ "$1" != "$default_id" ] || die "refusing to delete the default branch: it is the base"
-  resp="$(neon_call DELETE "/projects/${NEON_PROJECT_ID}/branches/$1")" || die "DELETE branch $2: curl failed"
+  resp="$(neon_call DELETE "/projects/$(neon_project_id)/branches/$1")" || die "DELETE branch $2: curl failed"
   code="$(neon_code "$resp")"
   case "$code" in
     2??) return 0 ;;
@@ -117,6 +150,6 @@ neon_delete_branch() { # <id> <name>
 }
 
 neon_connection_uri() { # <id> <database> <role> <pooled>
-  neon_get "/projects/${NEON_PROJECT_ID}/connection_uri?branch_id=$1&database_name=$2&role_name=$3&pooled=$4" \
+  neon_get "/projects/$(neon_project_id)/connection_uri?branch_id=$1&database_name=$2&role_name=$3&pooled=$4" \
     | jq -r '.uri // empty'
 }

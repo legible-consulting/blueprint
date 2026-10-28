@@ -57,8 +57,11 @@ jobs:
     # hooks and scripts, so a template error fails here and not in a client repo. In a build,
     # new-run.sh --dry-run runs on a fixture stub and must leave the tree as it was, merge.sh
     # keeps each refusal against a fake gh that serves REST only, and the router passes its
-    # fixture test. neon-nouat answers db/migrations, so the proof shows that
-    # the migrations_path answer gets to preview-db.yml, and not only the default.
+    # fixture test. In `all`, a monorepo with UAT and Neon, rollback.sh and preview-db.sh run
+    # against a fake Vercel and Neon API with two UAT projects, and act on those two only. No
+    # rendered file names VERCEL_PROJECT or NEON_PROJECT_ID. neon-nouat answers db/migrations, so
+    # the proof shows that the migrations_path answer gets to preview-db.yml, and not only the
+    # default.
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -288,6 +291,11 @@ jobs:
           # expression opens with a dollar sign and two braces, and stays.
           ! grep -rqE '(^|[^$])\{\{|\{%' CLAUDE.md README.md .gitignore .github .icm \
             || { echo "::error::${NAME}: an unrendered Jinja tag remains"; fail=1; }
+          # No variable names a Vercel project or a Neon project: the scripts find them.
+          scan=(.github .icm)
+          [ ! -e .env.example ] || scan+=(.env.example)
+          ! grep -rqE 'VERCEL_PROJECT|NEON_PROJECT_ID' "${scan[@]}" \
+            || { echo "::error::${NAME}: a rendered file names VERCEL_PROJECT or NEON_PROJECT_ID"; fail=1; }
           exit "$fail"
       - name: The rendered workspace keeps the conventions
         if: matrix.workspace == 'true'
@@ -570,6 +578,107 @@ jobs:
           run_case 'mergeable not computed' '.mergeable = null' . . 0 'merge commit: feedface'
           [ "$(grep -cxF 'api repos/zz/proof/pulls/7' "${fake}/calls")" -eq 2 ] \
             || { echo "::error::${NAME}: merge.sh does not read the pull request again when mergeable is null"; fail=1; }
+          exit "$fail"
+      - name: The scripts find the UAT projects and act on each one
+        if: matrix.name == 'all'
+        working-directory: ${{ runner.temp }}/zz-${{ matrix.name }}
+        # A fake curl goes first on PATH. It reads the config file that lib/vercel.sh and
+        # lib/neon.sh write, serves fixture JSON for each path, logs each call, and exits 98 on a
+        # path it does not know. The team holds four projects. app and admin are linked to the
+        # repository and have `uat`. marketing is linked and has no `uat`. other is linked to
+        # another repository. The Neon search returns two projects, and only uat-zz-proof has the
+        # exact name.
+        run: |
+          fail=0
+          fake="${RUNNER_TEMP}/fakeapi"
+          mkdir -p "${fake}/bin"
+          cat > "${fake}/bin/curl" <<'EOF'
+          #!/usr/bin/env bash
+          cfg=""
+          while [ $# -gt 0 ]; do case "$1" in --config) cfg="$2"; shift 2 ;; *) shift ;; esac; done
+          [ -n "$cfg" ] || { echo "fake curl: no --config" >&2; exit 99; }
+          url="$(sed -nE 's/^url = "(.*)"$/\1/p' "$cfg")"
+          method="$(sed -nE 's/^request = "(.*)"$/\1/p' "$cfg")"
+          path="${url#https://api.vercel.com}"
+          path="${path#https://console.neon.tech/api/v2}"
+          path="$(sed -E 's/[?&]slug=zz$//' <<<"$path")"
+          printf '%s %s\n' "$method" "$path" >> "${FAKE}/calls"
+          ok() { printf '%s\n200' "$1"; exit 0; }
+          uat='{"environments":[{"slug":"uat","branchMatcher":{"type":"equals","pattern":"main"},"domains":[{"name":"uat.zz.test"}]}]}'
+          case "${method} ${path}" in
+            "GET /v10/projects?repoUrl=https%3A%2F%2Fgithub.com%2Fzz%2Fproof&limit=100")
+              ok '{"projects":[{"id":"prj_app","name":"app","link":{"org":"zz","repo":"proof"}},
+                {"id":"prj_admin","name":"admin","link":{"org":"zz","repo":"proof"}},
+                {"id":"prj_web","name":"marketing","link":{"org":"zz","repo":"proof"}},
+                {"id":"prj_x","name":"other","link":{"org":"zz","repo":"other"}}]}' ;;
+            "GET /v9/projects/prj_app/custom-environments" | "GET /v9/projects/prj_admin/custom-environments") ok "$uat" ;;
+            "GET /v9/projects/prj_web/custom-environments") ok '{"environments":[]}' ;;
+            "GET /v9/projects/prj_app" | "GET /v9/projects/prj_admin")
+              p="${path##*/prj_}"; ok "{\"id\":\"prj_${p}\",\"name\":\"${p}\",\"targets\":{\"production\":{\"id\":\"dpl_${p}2\"}}}" ;;
+            "GET /v6/deployments?projectId=prj_app&target=production&limit=20" | "GET /v6/deployments?projectId=prj_admin&target=production&limit=20")
+              p="${path#*prj_}"; p="${p%%&*}"
+              ok "{\"deployments\":[{\"uid\":\"dpl_${p}2\",\"url\":\"${p}-2.vercel.app\",\"state\":\"READY\",\"created\":2000,\"meta\":{\"githubCommitSha\":\"bbbbbbb\"}},
+                {\"uid\":\"dpl_${p}1\",\"url\":\"${p}-1.vercel.app\",\"state\":\"READY\",\"created\":1000,\"meta\":{\"githubCommitSha\":\"aaaaaaa\"}}]}" ;;
+            "GET /v9/projects/prj_app/env?gitBranch=zz-branch" | "GET /v9/projects/prj_admin/env?gitBranch=zz-branch")
+              if [ "$FAKE_MODE" = delete ]; then
+                p="${path#/v9/projects/prj_}"; p="${p%%/*}"
+                ok "{\"envs\":[{\"id\":\"env_${p}_1\",\"key\":\"DATABASE_URL\",\"gitBranch\":\"zz-branch\",\"target\":[\"preview\"]},
+                  {\"id\":\"env_${p}_2\",\"key\":\"DATABASE_URL_UNPOOLED\",\"gitBranch\":\"zz-branch\",\"target\":[\"preview\"]},
+                  {\"id\":\"env_${p}_3\",\"key\":\"MIGRATE_AT_BUILD\",\"gitBranch\":\"zz-branch\",\"target\":[\"preview\"]}]}"
+              fi
+              ok '{"envs":[]}' ;;
+            "POST /v10/projects/prj_app/env?upsert=true" | "POST /v10/projects/prj_admin/env?upsert=true") ok '{}' ;;
+            "DELETE /v9/projects/prj_app/env/env_app_"[123] | "DELETE /v9/projects/prj_admin/env/env_admin_"[123]) ok '{}' ;;
+            "GET /v6/deployments?projectId=prj_app&limit=100" | "GET /v6/deployments?projectId=prj_admin&limit=100") ok '{"deployments":[]}' ;;
+            "GET /projects?search=uat-zz-proof&limit=100")
+              ok '{"projects":[{"id":"neon-old","name":"uat-zz-proof-old"},{"id":"neon-uat","name":"uat-zz-proof"}]}' ;;
+            "GET /projects/neon-uat/branches")
+              if [ "$FAKE_MODE" = delete ]; then
+                ok '{"branches":[{"id":"br-base","name":"main","default":true},{"id":"br-prev","name":"preview/zz-branch","default":false}]}'
+              fi
+              ok '{"branches":[{"id":"br-base","name":"main","default":true}]}' ;;
+            "POST /projects/neon-uat/branches") ok '{"branch":{"id":"br-prev"}}' ;;
+            "GET /projects/neon-uat/branches/br-prev") ok '{"branch":{"current_state":"ready"}}' ;;
+            "GET /projects/neon-uat/branches/br-prev/databases") ok '{"databases":[{"name":"app","owner_name":"app_owner"}]}' ;;
+            "GET /projects/neon-uat/connection_uri?branch_id=br-prev&database_name=app&role_name=app_owner&pooled="*) ok '{"uri":"postgresql://fake"}' ;;
+            "DELETE /projects/neon-uat/branches/br-prev") ok '{}' ;;
+            *) echo "unexpected: ${method} ${path}" >&2; exit 98 ;;
+          esac
+          EOF
+          chmod +x "${fake}/bin/curl"
+          # run_script <label> <mode> <exit> <text> <command...>
+          run_script() {
+            local label="$1" mode="$2" want="$3" text="$4" code=0
+            shift 4
+            rm -f "${fake}/calls"
+            out="$(FAKE="$fake" FAKE_MODE="$mode" GH_REPO=zz/proof VERCEL_TEAM=zz VERCEL_TOKEN=fake NEON_API_KEY=fake \
+              PATH="${fake}/bin:${PATH}" "$@" 2>&1)" || code=$?
+            [ "$code" -eq "$want" ] || { echo "::error::${NAME}: ${label}: exit ${code}, not ${want}"; echo "$out"; fail=1; }
+            grep -qxF -- "$text" <<<"$out" || { echo "::error::${NAME}: ${label}: no line '${text}'"; echo "$out"; fail=1; }
+            # marketing is read once, for its custom environments. No other call names it, other or neon-old.
+            bad="$(grep -E 'prj_web|prj_x|neon-old' "${fake}/calls" 2>/dev/null | grep -vxF 'GET /v9/projects/prj_web/custom-environments' || true)"
+            [ -z "$bad" ] || { echo "::error::${NAME}: ${label}: a call reached a project that is not a UAT project: ${bad}"; fail=1; }
+          }
+          # count <label> <n> <call>: the call is in the log n times.
+          count() {
+            local n
+            n="$(grep -cxF -- "$3" "${fake}/calls" || true)"
+            [ "$n" -eq "$2" ] || { echo "::error::${NAME}: ${1}: '${3}' ${n} times, not ${2}"; fail=1; }
+          }
+          run_script rollback.sh none 0 'RESULT: PREPARED dpl_admin1 dpl_app1' bash .icm/scripts/rollback.sh
+          for c in 'vercel rollback admin-1.vercel.app --scope zz' 'vercel rollback app-1.vercel.app --scope zz'; do
+            grep -qxF "  ${c}" <<<"$out" || { echo "::error::${NAME}: rollback.sh: no command '${c}'"; echo "$out"; fail=1; }
+          done
+          [ "$(grep -c '^  vercel rollback' <<<"$out")" -eq 2 ] || { echo "::error::${NAME}: rollback.sh: not two commands"; fail=1; }
+          run_script 'preview-db.sh create' create 0 'RESULT: CREATED preview/zz-branch' bash .icm/scripts/preview-db.sh create zz-branch
+          count 'preview-db.sh create' 1 'POST /projects/neon-uat/branches'
+          count 'preview-db.sh create' 3 'POST /v10/projects/prj_app/env?upsert=true'
+          count 'preview-db.sh create' 3 'POST /v10/projects/prj_admin/env?upsert=true'
+          run_script 'preview-db.sh delete' delete 0 'RESULT: DELETED preview/zz-branch' bash .icm/scripts/preview-db.sh delete zz-branch
+          count 'preview-db.sh delete' 1 'DELETE /projects/neon-uat/branches/br-prev'
+          for p in app admin; do
+            for i in 1 2 3; do count 'preview-db.sh delete' 1 "DELETE /v9/projects/prj_${p}/env/env_${p}_${i}"; done
+          done
           exit "$fail"
       - name: The router passes its fixture test
         if: matrix.workspace == 'false'
