@@ -243,6 +243,13 @@ jobs:
               || { echo "::error::${NAME}: preview-db.yml does not watch ${MIGRATIONS_PATH}/**"; fail=1; }
             grep -qF '.icm/database/CONTEXT.md' CLAUDE.md || { echo "::error::${NAME}: CLAUDE.md does not route to .icm/database/CONTEXT.md"; fail=1; }
             grep -qx 'MIGRATE_AT_BUILD=' .env.example || { echo "::error::${NAME}: .env.example does not name MIGRATE_AT_BUILD"; fail=1; }
+            for target in uat production; do
+              line="\"vercel-build\": \"if [ \\\"\$VERCEL_TARGET_ENV\\\" = ${target} ] || [ \\\"\$MIGRATE_AT_BUILD\\\" = 1 ]; then npm run db:migrate && npm run db:verify; fi && next build\""
+              grep -qxF "$line" "$f" || { echo "::error::${NAME}: ${f} lacks the vercel-build line for ${target}"; fail=1; }
+            done
+            ! grep -qF '`MIGRATE_AT_BUILD=1` on `uat`' "$f" || { echo "::error::${NAME}: ${f} sets MIGRATE_AT_BUILD on uat by hand"; fail=1; }
+            grep -B1 -x 'MIGRATE_AT_BUILD=' .env.example | head -1 | grep -q '\[preview\]$' \
+              || { echo "::error::${NAME}: the note above MIGRATE_AT_BUILD in .env.example does not end with [preview]"; fail=1; }
             grep -qxF "migrations_path: ${MIGRATIONS_PATH}" .copier-answers.yml \
               || { echo "::error::${NAME}: .copier-answers.yml does not keep migrations_path"; fail=1; }
           else
