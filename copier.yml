@@ -80,9 +80,10 @@ database:
   type: str
   help: >-
     The database the build runs on. neon renders the database contract
-    (.icm/database/CONTEXT.md), the preview-branch script preview-db.sh, and the workflows
-    preview-db.yml and neon-cleanup.yml. Any other answer renders no database file, and the
-    answer stays in .copier-answers.yml so the blueprint can learn what those builds need.
+    (.icm/database/CONTEXT.md), the migration at build vercel-build.sh, and the setup stubs of
+    the Neon projects and the Neon integration, which makes a Neon branch for each preview. Any
+    other answer renders no database file, and the answer stays in .copier-answers.yml so the
+    blueprint can learn what those builds need.
   choices:
     - none
     - neon
@@ -90,15 +91,3 @@ database:
     - other
   default: none
   when: "{{ not workspace }}"
-
-migrations_path:
-  type: str
-  help: >-
-    The folder the migration files live in, relative to the repo root, for example migrations
-    or drizzle. A pull request that changes a file in it gets its own Neon branch.
-  default: migrations
-  when: "{{ not workspace and database == 'neon' }}"
-  validator: >-
-    {% if not migrations_path | regex_search('^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$')
-    or migrations_path | regex_search('(^|/)\\.\\.(/|$)') %}a relative folder: no leading or
-    trailing /, no .. segment, only A-Z a-z 0-9 . _ - /{% endif %}

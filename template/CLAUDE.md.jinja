@@ -78,7 +78,10 @@ build's own rows go below.
 | read the UAT batch, record the client's sign-off, roll back | `.icm/uat/CONTEXT.md` (the whole UAT contract), then its scripts |
 {%- endif %}
 {%- if database == 'neon' %}
-| change the database, or read where a preview's database comes from | `.icm/database/CONTEXT.md`, then `preview-db.sh` |
+| change the database, or read where a preview's database comes from | `.icm/database/CONTEXT.md` |
+{%- endif %}
+{%- if uat or database == 'neon' %}
+| a setup act is done, or read what setup is open | `.icm/intake/CONTEXT.md` § The setup stub, then `.icm/intake/setup/` |
 {%- endif %}
 
 ## Rules

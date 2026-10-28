@@ -13,9 +13,9 @@ Built by Legible Consulting. Tickets: `.icm/intake/`. Conventions: `CLAUDE.md`.
 | Environment | Address | Database | Moves on |
 |---|---|---|---|
 {%- if database == 'neon' %}
-| Production | <the production domain> | the production Neon project's default branch | `promote.sh run --tag <tag>`, on Jamie's word |
-| UAT | <https://uat.the production domain> | the UAT Neon project's default branch, the base | every merge to `main` |
-| Preview | the pull request's Vercel preview | the base, or the Neon branch `preview/<branch>` when the pull request changes a migration | every push to the branch |
+| Production | <the production domain> | the default branch of the Neon project `{{ slug }}` | `promote.sh run --tag <tag>`, on Jamie's word |
+| UAT | <https://uat.the production domain> | the default branch of the Neon project `uat-{{ slug }}` | every merge to `main` |
+| Preview | the pull request's Vercel preview | its own Neon branch `preview/<branch>` of `uat-{{ slug }}`, made by the Neon integration | every push to the branch |
 {%- else %}
 | Production | <the production domain> | production's database | `promote.sh run --tag <tag>`, on Jamie's word |
 | UAT | <https://uat.the production domain> | the UAT database, apart from production's | every merge to `main` |
@@ -28,7 +28,7 @@ The contract: `.icm/uat/CONTEXT.md`.
 
 ## Database
 
-One Neon project. Its default branch is production's database and the base: every preview
-reads it. A pull request that changes a migration gets the Neon branch `preview/<branch>`. The
-contract: `.icm/database/CONTEXT.md`.
+One Neon project, `{{ slug }}`. Its default branch is production's database. Each preview gets
+its own Neon branch `preview/<branch>`, made by the Neon integration. The contract:
+`.icm/database/CONTEXT.md`.
 {%- endif %}

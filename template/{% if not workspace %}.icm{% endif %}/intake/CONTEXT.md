@@ -33,6 +33,9 @@ This file is the whole contract. It stands alone: a session that reads only this
   triage/                one-off findings that belong to no epic
     <slug>.md            a bug, a tweak, a chore or a hotfix
     _done/
+  setup/                 the person acts that the answers need. Copier writes them
+    <slug>.md            one act in a dashboard or a settings page, done by a person
+    _done/               the acts that a person did
   _done/                 epics whose last stub merged, moved whole
 ```
 
@@ -59,6 +62,8 @@ Rules of the folder:
 - **The pull request that ships a stub is the pull request that retires it.** The move to
   `_done/` is a commit on the ticket's branch. The merge makes it true.
 - **A new plan becomes stubs here**, as an epic with a breakdown, never a loose list.
+- **A setup stub is not a ticket.** It has no branch and no pull request of its own. The
+  loop never takes it (§ The setup stub).
 
 ## The stub
 
@@ -171,6 +176,45 @@ No breakdown, no `sequence`, no `depends-on`. The stub needs its acceptance crit
 `new-run.sh` copies them into the pull request, and a stub without them gets one placeholder
 line to fill by hand. The folder is a backlog, not a batch. Jamie prunes it. A session only
 adds to it and consumes from it.
+
+### The setup stub
+
+Some setup only a person can do: a project in a dashboard, a secret, a setting. Copier writes
+one stub for each such act into `setup/`, from the answers in `.copier-answers.yml`. A new
+answer or a new blueprint tag adds the stubs of its acts at the next `copier update`. Copier
+never writes a stub again after a person moved it (why: the list of setup acts stays true
+with each update, so no person forgets an act · Jamie, 2026-10-28).
+
+```md
+# Setup: <the act, one line>
+
+- setup-slug: <kebab, equal to the file name>
+- needs: <the answers that ask for this act>
+- where: <the dashboard or the settings page>
+
+## Why
+
+<What fails without the act. One or two sentences.>
+
+## Steps
+
+1. <One instruction per line.>
+
+## Done when
+
+- [ ] <One observable result per line.>
+```
+
+- **Open or done is positional**, as for every stub. A stub in `setup/` is open. A stub in
+  `setup/_done/` is done.
+- **A person does the act, then says so.** On the person's word "setup <slug> done", a session
+  moves the stub into `setup/_done/`, adds the first line `> Done: <who>, <YYYY-MM-DD>`, and
+  commits the move on its branch. The merge makes it true. A session never moves a setup stub
+  on a guess, on a file's word or on a check that passed (why: a check reads part of an act, the
+  person did all of it · 2026-10-28).
+- **An act that does not apply** moves to `setup/_done/` with `> Dropped: <reason>, <date>`.
+- `session-start.sh` prints the open setup stubs at each session start, and the stop report
+  names each open one under `Operator:` when the work waits on it.
 
 ### The order of the epics
 
@@ -410,6 +454,7 @@ Operator:
 Unverified: <skipped, unproven or assumed>
 ```
 
+- Under `Operator:`, name each open setup stub that the work waits on, by its path.
 - Leave out `Operator:` when there is no act. Leave out `Unverified:` when it is empty.
 - Name a gate with its pull request link. The box is in the body, never in the chat.
 - Never trim these: a STOP and its reason, a red check, a skipped step, a plaintext credential

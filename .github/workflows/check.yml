@@ -50,7 +50,8 @@ jobs:
     # no, a workspace, neon without uat, and mongodb with uat. A build must carry the ticket
     # convention, the pull request template with both gate anchors, the three skills, a
     # CLAUDE.md under 80 lines and no BUILD.md. A uat render carries every UAT file and the
-    # others none. A neon render carries every database file and the others none. A workspace carries the three stage contracts, each with
+    # others none. A neon render carries every database file and the others none. Each build
+    # carries the setup stubs its answers ask for, and no other. A workspace carries the three stage contracts, each with
     # Inputs, Process, Outputs and status: stub, one gate, and a ci.yml that asks for the
     # contract check, and no build file. A build carries session-start.sh, registered, and it
     # prints the board of a fixture. A workspace carries neither. actionlint reads the rendered workflows and shellcheck the rendered
@@ -58,19 +59,22 @@ jobs:
     # new-run.sh --dry-run runs on a fixture stub and must leave the tree as it was, merge.sh
     # keeps each refusal against a fake gh that serves REST only, and the router passes its
     # fixture test. The git-writes guard asks before a REST merge or ref delete, and stays
-    # silent for merge.sh and a read. neon-nouat answers db/migrations, so the proof shows that
-    # the migrations_path answer gets to preview-db.yml, and not only the default.
+    # silent for merge.sh and a read. In `all`, a monorepo with UAT and Neon, rollback.sh runs
+    # against a fake Vercel API with two UAT projects, and acts on those two only, and a copier
+    # update keeps a done setup stub done. No rendered file names VERCEL_PROJECT,
+    # NEON_PROJECT_ID, NEON_API_KEY or MIGRATE_AT_BUILD. In each neon build, vercel-build.sh
+    # migrates on the right environments against a fake npm.
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { name: defaults, workspace: "false", monorepo: "false", release: "true", uat: "false", database: none, migrations_path: migrations }
-          - { name: all, workspace: "false", monorepo: "true", release: "true", uat: "true", database: neon, migrations_path: migrations }
-          - { name: minimal, workspace: "false", monorepo: "false", release: "false", uat: "false", database: none, migrations_path: migrations }
-          - { name: workspace, workspace: "true", monorepo: "false", release: "false", uat: "false", database: none, migrations_path: migrations }
-          - { name: neon-nouat, workspace: "false", monorepo: "false", release: "true", uat: "false", database: neon, migrations_path: db/migrations }
-          - { name: mongodb-uat, workspace: "false", monorepo: "false", release: "true", uat: "true", database: mongodb, migrations_path: migrations }
+          - { name: defaults, workspace: "false", monorepo: "false", release: "true", uat: "false", database: none }
+          - { name: all, workspace: "false", monorepo: "true", release: "true", uat: "true", database: neon }
+          - { name: minimal, workspace: "false", monorepo: "false", release: "false", uat: "false", database: none }
+          - { name: workspace, workspace: "true", monorepo: "false", release: "false", uat: "false", database: none }
+          - { name: neon-nouat, workspace: "false", monorepo: "false", release: "true", uat: "false", database: neon }
+          - { name: mongodb-uat, workspace: "false", monorepo: "false", release: "true", uat: "true", database: mongodb }
     env:
       NAME: ${{ matrix.name }}
       WORKSPACE: ${{ matrix.workspace }}
@@ -78,7 +82,6 @@ jobs:
       RELEASE: ${{ matrix.release }}
       UAT: ${{ matrix.uat }}
       DATABASE: ${{ matrix.database }}
-      MIGRATIONS_PATH: ${{ matrix.migrations_path }}
       ACTIONLINT_VERSION: 1.7.12
       ACTIONLINT_SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
     steps:
@@ -98,22 +101,7 @@ jobs:
           copier copy --defaults --vcs-ref HEAD \
             -d slug=zz-proof -d client_name="Zz Proof" -d language=en -d "workspace=${WORKSPACE}" \
             -d "monorepo=${MONOREPO}" -d "release=${RELEASE}" -d "uat=${UAT}" \
-            -d "database=${DATABASE}" -d "migrations_path=${MIGRATIONS_PATH}" \
-            . "${RUNNER_TEMP}/zz-${NAME}"
-      - name: The migrations_path validator refuses a bad folder
-        if: matrix.name == 'all'
-        # An absolute path, an empty value and a .. segment each stop the render.
-        run: |
-          fail=0
-          for p in /migrations "" a/../b; do
-            if copier copy --defaults --vcs-ref HEAD -d slug=zz-proof -d client_name="Zz Proof" \
-              -d database=neon -d "migrations_path=${p}" . "${RUNNER_TEMP}/zz-bad" >/dev/null 2>&1; then
-              echo "::error::migrations_path '${p}' renders, and the validator must refuse it"
-              fail=1
-            fi
-            rm -rf "${RUNNER_TEMP}/zz-bad"
-          done
-          exit "$fail"
+            -d "database=${DATABASE}" . "${RUNNER_TEMP}/zz-${NAME}"
       - name: The rendered settings deny each env file by name
         working-directory: ${{ runner.temp }}/zz-${{ matrix.name }}
         # A glob such as .env.* also matches .env.example, the file the kickoff and the UAT
@@ -222,15 +210,37 @@ jobs:
           for f in .icm/uat/CONTEXT.md .icm/scripts/promote.sh .icm/scripts/rollback.sh .github/workflows/promote.yml; do
             want "$UAT" "$f"
           done
-          for f in .icm/database/CONTEXT.md .icm/scripts/preview-db.sh .icm/scripts/vercel-build.sh \
-            .icm/scripts/lib/neon.sh .github/workflows/preview-db.yml .github/workflows/neon-cleanup.yml; do
+          for f in .icm/database/CONTEXT.md .icm/scripts/vercel-build.sh; do
             want "$neon" "$f"
           done
-          want "$either" .icm/scripts/lib/vercel.sh
+          want "$UAT" .icm/scripts/lib/vercel.sh
           want "$either" .env.example
-          never .icm/scripts/uat-db.sh
-          for s in .icm/scripts/preview-db.sh .icm/scripts/vercel-build.sh; do
-            [ ! -e "$s" ] || [ -x "$s" ] || { echo "::error::${NAME}: ${s} is not executable"; fail=1; }
+          # The integration makes the preview branches: no script or workflow of the build does.
+          for f in .icm/scripts/uat-db.sh .icm/scripts/preview-db.sh .icm/scripts/lib/neon.sh \
+            .github/workflows/preview-db.yml .github/workflows/neon-cleanup.yml; do
+            never "$f"
+          done
+          [ ! -e .icm/scripts/vercel-build.sh ] || [ -x .icm/scripts/vercel-build.sh ] \
+            || { echo "::error::${NAME}: .icm/scripts/vercel-build.sh is not executable"; fail=1; }
+          # The setup stubs: one for each act that the answers ask for, and no other.
+          db=false; [ "$DATABASE" != none ] && db=true
+          uatdb=false; [ "$UAT" = true ] && [ "$db" = true ] && uatdb=true
+          uatneon=false; [ "$UAT" = true ] && [ "$neon" = true ] && uatneon=true
+          st=.icm/intake/setup
+          for a in vercel-uat-environment actions-vercel uat-variables; do want "$UAT" "${st}/${a}.md"; done
+          want "$uatdb" "${st}/actions-production-database.md"
+          for a in neon-projects neon-vercel-integration github-delete-head-branches; do want "$neon" "${st}/${a}.md"; done
+          want "$uatneon" "${st}/uat-database.md"
+          [ "$either" = true ] || never "$st"
+          for f in "$st"/*.md; do
+            [ -e "$f" ] || continue
+            a="$(basename "$f" .md)"
+            head -n 1 "$f" | grep -q '^# Setup: .' || { echo "::error::${NAME}: ${f} has no '# Setup:' title"; fail=1; }
+            grep -qx -- "- setup-slug: ${a}" "$f" || { echo "::error::${NAME}: ${f} lacks '- setup-slug: ${a}'"; fail=1; }
+            for sec in Why Steps 'Done when'; do
+              grep -qx "## ${sec}" "$f" || { echo "::error::${NAME}: ${f} lacks '## ${sec}'"; fail=1; }
+            done
+            grep -q -- '^- \[ \] ' "$f" || { echo "::error::${NAME}: ${f} has no Done when box"; fail=1; }
           done
           grep -qx "database: ${DATABASE}" .copier-answers.yml \
             || { echo "::error::${NAME}: .copier-answers.yml does not keep database: ${DATABASE}"; fail=1; }
@@ -241,23 +251,14 @@ jobs:
             done
             n="$(wc -l < "$f")"
             [ "$n" -lt 90 ] || { echo "::error::${NAME}: ${f} has ${n} lines (limit 90)"; fail=1; }
-            grep -qF "paths: [\"${MIGRATIONS_PATH}/**\"]" .github/workflows/preview-db.yml \
-              || { echo "::error::${NAME}: preview-db.yml does not watch ${MIGRATIONS_PATH}/**"; fail=1; }
             grep -qF '.icm/database/CONTEXT.md' CLAUDE.md || { echo "::error::${NAME}: CLAUDE.md does not route to .icm/database/CONTEXT.md"; fail=1; }
-            grep -qx 'MIGRATE_AT_BUILD=' .env.example || { echo "::error::${NAME}: .env.example does not name MIGRATE_AT_BUILD"; fail=1; }
+            grep -qx 'DATABASE_URL=' .env.example || { echo "::error::${NAME}: .env.example does not name DATABASE_URL"; fail=1; }
             grep -qxF '"vercel-build": "bash .icm/scripts/vercel-build.sh next build"' "$f" \
               || { echo "::error::${NAME}: ${f} lacks the vercel-build line that calls the script"; fail=1; }
-            owner=production; [ "$UAT" = true ] && owner=uat
-            grep -qx "owner=\"${owner}\"" .icm/scripts/vercel-build.sh \
-              || { echo "::error::${NAME}: vercel-build.sh does not migrate on ${owner}"; fail=1; }
-            ! grep -qF '`MIGRATE_AT_BUILD=1` on `uat`' "$f" || { echo "::error::${NAME}: ${f} sets MIGRATE_AT_BUILD on uat by hand"; fail=1; }
-            grep -B1 -x 'MIGRATE_AT_BUILD=' .env.example | head -1 | grep -q '\[preview\]$' \
-              || { echo "::error::${NAME}: the note above MIGRATE_AT_BUILD in .env.example does not end with [preview]"; fail=1; }
-            grep -qxF "migrations_path: ${MIGRATIONS_PATH}" .copier-answers.yml \
-              || { echo "::error::${NAME}: .copier-answers.yml does not keep migrations_path"; fail=1; }
+            grep -qF 'advisory lock' "$f" || { echo "::error::${NAME}: ${f} does not name the advisory lock of db:migrate"; fail=1; }
           else
             ! grep -qF '.icm/database/CONTEXT.md' CLAUDE.md || { echo "::error::${NAME}: CLAUDE.md routes to .icm/database/CONTEXT.md"; fail=1; }
-            [ ! -e .env.example ] || ! grep -q '^NEON_\|^MIGRATE_AT_BUILD' .env.example \
+            [ ! -e .env.example ] || ! grep -q '^DATABASE_URL' .env.example \
               || { echo "::error::${NAME}: .env.example names a Neon variable"; fail=1; }
           fi
           if [ "$UAT" = true ]; then
@@ -289,6 +290,19 @@ jobs:
           # expression opens with a dollar sign and two braces, and stays.
           ! grep -rqE '(^|[^$])\{\{|\{%' CLAUDE.md README.md .gitignore .github .icm \
             || { echo "::error::${NAME}: an unrendered Jinja tag remains"; fail=1; }
+          # No variable names a Vercel project or a Neon project: the scripts find them. No
+          # rendered file reads a Neon key or a migration flag: the integration and the build
+          # decide.
+          scan=(.github .icm)
+          [ ! -e .env.example ] || scan+=(.env.example)
+          ! grep -rqE 'VERCEL_PROJECT|NEON_PROJECT_ID|NEON_API_KEY|MIGRATE_AT_BUILD' "${scan[@]}" \
+            || { echo "::error::${NAME}: a rendered file names VERCEL_PROJECT, NEON_PROJECT_ID, NEON_API_KEY or MIGRATE_AT_BUILD"; fail=1; }
+          if [ "$UAT" = true ]; then
+            grep -qx 'VERCEL_TOKEN=' .env.example || { echo "::error::${NAME}: .env.example does not name VERCEL_TOKEN"; fail=1; }
+          else
+            [ ! -e .env.example ] || ! grep -q '^VERCEL_' .env.example \
+              || { echo "::error::${NAME}: .env.example names a Vercel variable without UAT"; fail=1; }
+          fi
           exit "$fail"
       - name: The rendered workspace keeps the conventions
         if: matrix.workspace == 'true'
@@ -349,15 +363,17 @@ jobs:
       - name: session-start.sh prints the board of a fixture
         if: matrix.workspace == 'false'
         working-directory: ${{ runner.temp }}/zz-${{ matrix.name }}
-        # A copy of the render gets two epics, one triage stub, an Order and two branches. The
-        # hook must print the expected lines, keep the checked-out ticket started, and stay
-        # quiet on stderr with no README.md, no .git or no open stub.
+        # A copy of the render, with no setup stub, gets two epics, one triage stub, an Order
+        # and two branches. The hook must print the expected lines, keep the checked-out ticket
+        # started, and stay quiet on stderr with no README.md, no .git or no open stub. Then an
+        # open setup stub prints on its own, and a done one does not.
         run: |
           fail=0
           b="${RUNNER_TEMP}/board-${NAME}"
           cp -a . "$b"
           cd "$b"
           i=.icm/intake
+          rm -rf "$i/setup"
           mkdir -p "$i/zz-alpha" "$i/zz-beta/_done"
           printf '# Breakdown: Zz alpha\n' > "$i/zz-alpha/breakdown.md"
           printf '# Stub: A1\n\n- feature-slug: a1\n- sequence: 2 of 3\n' > "$i/zz-alpha/a1.md"
@@ -410,6 +426,18 @@ jobs:
           rm -rf "$i/zz-alpha" "$i/zz-beta" "$i/triage/zz-fix.md"
           [ -z "$(CLAUDE_PROJECT_DIR="$b" bash .claude/hooks/session-start.sh 2>>"${b}.err")" ] \
             || { echo "::error::${NAME}: session-start.sh prints with no open stub"; fail=1; }
+          # An open setup stub prints with no ticket open, and does not count as a stub.
+          mkdir -p "$i/setup/_done"
+          printf '# Setup: Zz act\n\n- setup-slug: zz-act\n' > "$i/setup/zz-act.md"
+          printf '> Done: Jamie, 2026-10-28\n# Setup: Zz old\n' > "$i/setup/_done/zz-old.md"
+          want="$(printf '%s\n' 'The board of .icm/intake/ (read-only):' \
+            '  setup: open acts for a person: zz-act (.icm/intake/setup/)' \
+            '0 open stubs in total. Planning lives in .icm/intake/, never in a loose TODO.md.')"
+          got="$(CLAUDE_PROJECT_DIR="$b" bash .claude/hooks/session-start.sh 2>>"${b}.err")"
+          [ "$got" = "$want" ] || { echo "::error::${NAME}: session-start.sh prints other lines for a setup stub"; diff <(echo "$want") <(echo "$got"); fail=1; }
+          rm "$i/setup/zz-act.md"
+          [ -z "$(CLAUDE_PROJECT_DIR="$b" bash .claude/hooks/session-start.sh 2>>"${b}.err")" ] \
+            || { echo "::error::${NAME}: session-start.sh prints a done setup stub"; fail=1; }
           [ ! -s "${b}.err" ] || { echo "::error::${NAME}: session-start.sh writes to stderr"; cat "${b}.err"; fail=1; }
           exit "$fail"
       - name: new-run.sh --dry-run changes nothing
@@ -572,6 +600,109 @@ jobs:
           [ "$(grep -cxF 'api repos/zz/proof/pulls/7' "${fake}/calls")" -eq 2 ] \
             || { echo "::error::${NAME}: merge.sh does not read the pull request again when mergeable is null"; fail=1; }
           exit "$fail"
+      - name: rollback.sh finds the UAT projects and acts on each one
+        if: matrix.name == 'all'
+        working-directory: ${{ runner.temp }}/zz-${{ matrix.name }}
+        # A fake curl goes first on PATH. It reads the config file that lib/vercel.sh writes,
+        # serves fixture JSON for each path, logs each call, and exits 98 on a path it does not
+        # know. The team holds four projects. app and admin are linked to the repository and
+        # have `uat`. marketing is linked and has no `uat`. other is linked to another
+        # repository.
+        run: |
+          fail=0
+          fake="${RUNNER_TEMP}/fakeapi"
+          mkdir -p "${fake}/bin"
+          cat > "${fake}/bin/curl" <<'EOF'
+          #!/usr/bin/env bash
+          cfg=""
+          while [ $# -gt 0 ]; do case "$1" in --config) cfg="$2"; shift 2 ;; *) shift ;; esac; done
+          [ -n "$cfg" ] || { echo "fake curl: no --config" >&2; exit 99; }
+          url="$(sed -nE 's/^url = "(.*)"$/\1/p' "$cfg")"
+          method="$(sed -nE 's/^request = "(.*)"$/\1/p' "$cfg")"
+          path="${url#https://api.vercel.com}"
+          path="$(sed -E 's/[?&]slug=zz$//' <<<"$path")"
+          printf '%s %s\n' "$method" "$path" >> "${FAKE}/calls"
+          ok() { printf '%s\n200' "$1"; exit 0; }
+          uat='{"environments":[{"slug":"uat","branchMatcher":{"type":"equals","pattern":"main"},"domains":[{"name":"uat.zz.test"}]}]}'
+          case "${method} ${path}" in
+            "GET /v10/projects?repoUrl=https%3A%2F%2Fgithub.com%2Fzz%2Fproof&limit=100")
+              ok '{"projects":[{"id":"prj_app","name":"app","link":{"org":"zz","repo":"proof"}},
+                {"id":"prj_admin","name":"admin","link":{"org":"zz","repo":"proof"}},
+                {"id":"prj_web","name":"marketing","link":{"org":"zz","repo":"proof"}},
+                {"id":"prj_x","name":"other","link":{"org":"zz","repo":"other"}}]}' ;;
+            "GET /v9/projects/prj_app/custom-environments" | "GET /v9/projects/prj_admin/custom-environments") ok "$uat" ;;
+            "GET /v9/projects/prj_web/custom-environments") ok '{"environments":[]}' ;;
+            "GET /v9/projects/prj_app" | "GET /v9/projects/prj_admin")
+              p="${path##*/prj_}"; ok "{\"id\":\"prj_${p}\",\"name\":\"${p}\",\"targets\":{\"production\":{\"id\":\"dpl_${p}2\"}}}" ;;
+            "GET /v6/deployments?projectId=prj_app&target=production&limit=20" | "GET /v6/deployments?projectId=prj_admin&target=production&limit=20")
+              p="${path#*prj_}"; p="${p%%&*}"
+              ok "{\"deployments\":[{\"uid\":\"dpl_${p}2\",\"url\":\"${p}-2.vercel.app\",\"state\":\"READY\",\"created\":2000,\"meta\":{\"githubCommitSha\":\"bbbbbbb\"}},
+                {\"uid\":\"dpl_${p}1\",\"url\":\"${p}-1.vercel.app\",\"state\":\"READY\",\"created\":1000,\"meta\":{\"githubCommitSha\":\"aaaaaaa\"}}]}" ;;
+            *) echo "unexpected: ${method} ${path}" >&2; exit 98 ;;
+          esac
+          EOF
+          chmod +x "${fake}/bin/curl"
+          # run_script <label> <exit> <text> <command...>
+          run_script() {
+            local label="$1" want="$2" text="$3" code=0
+            shift 3
+            rm -f "${fake}/calls"
+            out="$(FAKE="$fake" GH_REPO=zz/proof VERCEL_TEAM=zz VERCEL_TOKEN=fake \
+              PATH="${fake}/bin:${PATH}" "$@" 2>&1)" || code=$?
+            [ "$code" -eq "$want" ] || { echo "::error::${NAME}: ${label}: exit ${code}, not ${want}"; echo "$out"; fail=1; }
+            grep -qxF -- "$text" <<<"$out" || { echo "::error::${NAME}: ${label}: no line '${text}'"; echo "$out"; fail=1; }
+            # marketing is read once, for its custom environments. No other call names it or other.
+            bad="$(grep -E 'prj_web|prj_x' "${fake}/calls" 2>/dev/null | grep -vxF 'GET /v9/projects/prj_web/custom-environments' || true)"
+            [ -z "$bad" ] || { echo "::error::${NAME}: ${label}: a call reached a project that is not a UAT project: ${bad}"; fail=1; }
+          }
+          run_script rollback.sh 0 'RESULT: PREPARED dpl_admin1 dpl_app1' bash .icm/scripts/rollback.sh
+          for c in 'vercel rollback admin-1.vercel.app --scope zz' 'vercel rollback app-1.vercel.app --scope zz'; do
+            grep -qxF "  ${c}" <<<"$out" || { echo "::error::${NAME}: rollback.sh: no command '${c}'"; echo "$out"; fail=1; }
+          done
+          [ "$(grep -c '^  vercel rollback' <<<"$out")" -eq 2 ] || { echo "::error::${NAME}: rollback.sh: not two commands"; fail=1; }
+          exit "$fail"
+      - name: vercel-build.sh migrates on the right environments
+        if: matrix.database == 'neon'
+        working-directory: ${{ runner.temp }}/zz-${{ matrix.name }}
+        # A fake npm goes first on PATH and logs each call with the DATABASE_URL it got. Each
+        # build migrates its own database with the direct string, then builds. With UAT,
+        # production only builds. No VERCEL_TARGET_ENV, or no DATABASE_URL on a build that
+        # migrates, stops the build before any call.
+        run: |
+          fail=0
+          fake="${RUNNER_TEMP}/fakenpm"
+          mkdir -p "${fake}/bin"
+          printf '#!/usr/bin/env bash\necho "$* ${DATABASE_URL:-none}" >> "${FAKE_LOG}"\n' > "${fake}/bin/npm"
+          chmod +x "${fake}/bin/npm"
+          # build <label> <exit> <calls> <env...>: run the script with the env, and count the npm calls.
+          build() {
+            local label="$1" want="$2" calls="$3" code=0 n out
+            shift 3
+            rm -f "${fake}/log"
+            out="$(env -u VERCEL_TARGET_ENV -u DATABASE_URL -u DATABASE_URL_UNPOOLED -u npm_config_user_agent \
+              FAKE_LOG="${fake}/log" PATH="${fake}/bin:${PATH}" "$@" bash .icm/scripts/vercel-build.sh echo built 2>&1)" || code=$?
+            [ "$code" -eq "$want" ] || { echo "::error::${NAME}: ${label}: exit ${code}, not ${want}"; echo "$out"; fail=1; }
+            n=0; [ ! -e "${fake}/log" ] || n="$(wc -l < "${fake}/log")"
+            [ "$n" -eq "$calls" ] || { echo "::error::${NAME}: ${label}: ${n} npm calls, not ${calls}"; echo "$out"; fail=1; }
+            if [ "$calls" -gt 0 ]; then
+              grep -qx 'run db:migrate direct' "${fake}/log" && grep -qx 'run db:verify direct' "${fake}/log" \
+                || { echo "::error::${NAME}: ${label}: db:migrate and db:verify do not get the direct string"; cat "${fake}/log"; fail=1; }
+            fi
+            if [ "$want" -eq 0 ]; then
+              grep -qx built <<<"$out" || { echo "::error::${NAME}: ${label}: the build command did not run"; fail=1; }
+            fi
+          }
+          urls=(DATABASE_URL=pooled DATABASE_URL_UNPOOLED=direct)
+          build 'no VERCEL_TARGET_ENV' 1 0 "${urls[@]}"
+          build 'preview' 0 2 VERCEL_TARGET_ENV=preview "${urls[@]}"
+          build 'preview with no DATABASE_URL' 1 0 VERCEL_TARGET_ENV=preview
+          if [ "$UAT" = true ]; then
+            build 'uat' 0 2 VERCEL_TARGET_ENV=uat "${urls[@]}"
+            build 'production with UAT' 0 0 VERCEL_TARGET_ENV=production "${urls[@]}"
+          else
+            build 'production without UAT' 0 2 VERCEL_TARGET_ENV=production "${urls[@]}"
+          fi
+          exit "$fail"
       - name: The router passes its fixture test
         if: matrix.workspace == 'false'
         working-directory: ${{ runner.temp }}/zz-${{ matrix.name }}
@@ -636,7 +767,7 @@ jobs:
           - name: from-v0.8.0
             ref: v0.8.0
             old_answers: monorepo=false release=true uat=true
-            new_answers: workspace=false monorepo=false release=true uat=true database=neon migrations_path=migrations
+            new_answers: workspace=false monorepo=false release=true uat=true database=neon
     env:
       NAME: ${{ matrix.name }}
       REF: ${{ matrix.ref }}
@@ -748,6 +879,34 @@ jobs:
           done < <(LC_ALL=C comm -12 <(echo "$fu") <(echo "$fr"))
           echo "Compared ${n} files."
           [ "$n" -gt 0 ] || err "no file was compared"
+          exit "$fail"
+      - name: A done setup stub stays done, and a new answer adds its stubs
+        if: matrix.name == 'from-v0.8.0'
+        # A HEAD render with neon and no UAT, in git. A person moves neon-projects to
+        # setup/_done/. Then copier update answers uat yes. The moved stub must not come back,
+        # and the UAT acts must arrive open.
+        run: |
+          fail=0
+          u="${RUNNER_TEMP}/setup-update"
+          st=.icm/intake/setup
+          copier copy --defaults --vcs-ref HEAD -d slug=zz -d client_name=Zz -d language=en \
+            -d uat=false -d database=neon "$GITHUB_WORKSPACE" "$u"
+          git -C "$u" init -q -b main
+          git -C "$u" config user.name check
+          git -C "$u" config user.email check@example.invalid
+          git -C "$u" add -A
+          git -C "$u" commit -q -m render
+          [ -e "${u}/${st}/neon-projects.md" ] || { echo "::error::the neon render has no ${st}/neon-projects.md"; exit 1; }
+          [ ! -e "${u}/${st}/vercel-uat-environment.md" ] || { echo "::error::a render without UAT has a UAT setup stub"; fail=1; }
+          mkdir -p "${u}/${st}/_done"
+          git -C "$u" mv "${st}/neon-projects.md" "${st}/_done/neon-projects.md"
+          git -C "$u" commit -q -m "setup: neon-projects done"
+          (cd "$u" && copier update --defaults --vcs-ref HEAD --conflict inline -d uat=true)
+          [ ! -e "${u}/${st}/neon-projects.md" ] || { echo "::error::copier update wrote the done stub neon-projects again"; fail=1; }
+          [ -e "${u}/${st}/_done/neon-projects.md" ] || { echo "::error::copier update removed the done stub neon-projects"; fail=1; }
+          for a in vercel-uat-environment actions-vercel uat-variables actions-production-database uat-database; do
+            [ -e "${u}/${st}/${a}.md" ] || { echo "::error::the answer uat yes did not add the open stub ${a}"; fail=1; }
+          done
           exit "$fail"
 
   ste:
