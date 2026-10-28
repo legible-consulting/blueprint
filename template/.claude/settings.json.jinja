@@ -1,8 +1,18 @@
 {#- The deny list names each secret env file, so .env.example stays readable: the kickoff, the
 UAT setup and the written-once list tell a session to read it. A glob such as .env.* also
 matches .env.example. -#}
+{#- The allow list is build-only, because a workspace has no .icm/scripts/. It names the two
+scripts that merge, so that auto mode runs them after the tick or Jamie's word. Each script
+carries its gate and refuses without it. No rule allows a raw `gh api` merge or a branch delete. -#}
 {
   "permissions": {
+{%- if not workspace %}
+    "allow": [
+      "Bash(.icm/scripts/merge.sh *)",
+      "Bash(.icm/scripts/release.sh)",
+      "Bash(.icm/scripts/release.sh *)"
+    ],
+{%- endif %}
     "deny": [
       "Read(./**/.env)",
       "Read(./**/.env.local)",

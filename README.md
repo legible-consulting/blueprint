@@ -25,7 +25,7 @@ The blueprint is MIT licensed: see `LICENSE`.
 `check.yml` renders six proof answer sets on each push (the defaults, every yes with `neon`,
 `release` no, a workspace, `neon` without UAT, and `mongodb` with UAT). It lints the rendered
 workflows, hooks and scripts. In each build it runs the router's fixture test, the board's
-fixture and a dry run of `new-run.sh`. It proves `copier update` from an older tag to `HEAD`.
+fixture, a dry run of `new-run.sh` and the refusals of `merge.sh` with a fake `gh`. It proves `copier update` from an older tag to `HEAD`.
 It checks that every functionality question has a default and a help line.
 
 ## The template
@@ -38,10 +38,10 @@ Every build carries these files, whatever its answers:
 | `.copier-answers.yml` | the answers and the blueprint tag |
 | `.icm/intake/` | the ticket convention: `CONTEXT.md` (the contract and the loop), `README.md`, the empty `_done/` folders |
 | `.icm/lanes/<lane>/CONTEXT.md` | the four lanes for a one-off: `bug`, `tweak`, `chore`, `hotfix` |
-| `.icm/scripts/` | `new-run.sh` (with `--ready` and `--dry-run`), `close-out.sh`, `merge.sh`, `release.sh` |
+| `.icm/scripts/` | `new-run.sh` (with `--ready` and `--dry-run`), `close-out.sh`, `checks.sh`, `merge.sh`, `release.sh`, and `lib/github.sh`. Each GitHub call is REST, through `gh api`, because a Claude Code cloud session gets HTTP 403 on GraphQL |
 | `.github/pull_request_template.md` | the pull request body, the two gates at the top |
 | `.github/workflows/ci.yml` | calls `.github`'s `check-client` |
-| `.claude/settings.json` | the deny list, and the registration of the hooks |
+| `.claude/settings.json` | the allow list for `merge.sh` and `release.sh` (build only), the deny list, and the registration of the hooks |
 | `.claude/hooks/` | the three guards, the router `route-request.sh` and its test, the board `session-start.sh` |
 | `.claude/skills/` | the three skills below |
 
