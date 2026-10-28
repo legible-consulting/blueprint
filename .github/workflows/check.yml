@@ -55,8 +55,9 @@ jobs:
     # contract check, and no build file. A build carries session-start.sh, registered, and it
     # prints the board of a fixture. A workspace carries neither. actionlint reads the rendered workflows and shellcheck the rendered
     # hooks and scripts, so a template error fails here and not in a client repo. In a build,
-    # new-run.sh --dry-run runs on a fixture stub and must leave the tree as it was, and the
-    # router passes its fixture test. neon-nouat answers db/migrations, so the proof shows that
+    # new-run.sh --dry-run runs on a fixture stub and must leave the tree as it was, merge.sh
+    # keeps each refusal against a fake gh that serves REST only, and the router passes its
+    # fixture test. neon-nouat answers db/migrations, so the proof shows that
     # the migrations_path answer gets to preview-db.yml, and not only the default.
     runs-on: ubuntu-latest
     strategy:
@@ -124,6 +125,8 @@ jobs:
             || { echo "::error::${NAME}: the deny list does not name .env.local"; fail=1; }
           ! grep -qF '.env.*)' <<<"$deny" \
             || { echo "::error::${NAME}: the deny list has a .env.* glob, which blocks .env.example"; fail=1; }
+          [ "$(grep -c . <<<"$deny")" -eq 12 ] \
+            || { echo "::error::${NAME}: the deny list has $(grep -c . <<<"$deny") rules, not 12"; fail=1; }
           exit "$fail"
       - name: The rendered build keeps the conventions
         if: matrix.workspace == 'false'
@@ -144,6 +147,16 @@ jobs:
           need .icm/scripts/close-out.sh
           need .icm/scripts/merge.sh
           need .icm/scripts/release.sh
+          need .icm/scripts/checks.sh
+          need .icm/scripts/lib/github.sh
+          for f in new-run close-out merge release checks; do
+            [ ! -e ".icm/scripts/${f}.sh" ] || [ -x ".icm/scripts/${f}.sh" ] \
+              || { echo "::error::${NAME}: .icm/scripts/${f}.sh is not executable"; fail=1; }
+          done
+          # A Claude Code cloud session gets HTTP 403 on GraphQL. The scripts use gh api, the
+          # REST API, only. A comment line may name the commands.
+          ! grep -rnE '^[^#]*gh (pr |release list|repo view)' .icm/scripts/ \
+            || { echo "::error::${NAME}: a script in .icm/scripts/ calls GraphQL through gh"; fail=1; }
           # Each lane contract keeps the three sections and stays under 60 lines. A workspace
           # has no .icm, so it has no lane.
           for l in bug tweak chore hotfix; do
@@ -177,6 +190,11 @@ jobs:
             || { echo "::error::${NAME}: .claude/settings.json does not register session-start.sh"; fail=1; }
           jq -e '.hooks.UserPromptSubmit[0].hooks[0].command | contains("route-request.sh")' .claude/settings.json >/dev/null \
             || { echo "::error::${NAME}: settings.json does not register route-request.sh"; fail=1; }
+          # The allow list names the two scripts that merge, and nothing else. Auto mode then
+          # runs them after the tick or Jamie's word. Each script carries its gate.
+          jq -e '.permissions.allow == ["Bash(.icm/scripts/merge.sh *)", "Bash(.icm/scripts/release.sh)", "Bash(.icm/scripts/release.sh *)"]' \
+            .claude/settings.json >/dev/null \
+            || { echo "::error::${NAME}: .claude/settings.json does not allow exactly merge.sh and release.sh"; fail=1; }
           # The three skills. asd-ste100 is a copy of the linter's repo at the pinned commit. Each
           # written skill stays under 120 lines, and its frontmatter name equals its folder.
           for f in SKILL.md README.md LICENSE references/writing-rules.md scripts/ste-lint.py \
@@ -297,6 +315,8 @@ jobs:
           never .claude/hooks/route-request.test.sh
           jq -e '.hooks | has("UserPromptSubmit") | not' .claude/settings.json >/dev/null \
             || { echo "::error::${NAME}: settings.json registers a UserPromptSubmit hook"; fail=1; }
+          jq -e '.permissions | has("allow") | not' .claude/settings.json >/dev/null \
+            || { echo "::error::${NAME}: .claude/settings.json has an allow list"; fail=1; }
           for d in 01-collect 02-draft 03-deliver; do
             f="${d}/CONTEXT.md"
             need "$f"
@@ -463,6 +483,84 @@ jobs:
           done
           ! grep -qF 'Spec approved' <<<"$out" || { echo "::error::${NAME}: the triage dry run keeps the Spec approved gate"; fail=1; }
           [ "$(git status --porcelain --untracked-files=all)" = "$st" ] || { echo "::error::${NAME}: the triage dry run changed the working tree"; fail=1; }
+          exit "$fail"
+      - name: merge.sh uses the REST API and keeps each refusal
+        if: matrix.workspace == 'false'
+        working-directory: ${{ runner.temp }}/zz-${{ matrix.name }}
+        # A fake gh goes first on PATH. It serves fixture JSON for each REST path and logs each
+        # call. It exits 99 on a call that is not `gh api`, and 98 on a path it does not know. The
+        # base pull request is ticked, green and clean. Each refusal case changes one field. The
+        # check runs hold an older failed run of `ci`, so only the latest run per name counts.
+        run: |
+          fail=0
+          fake="${RUNNER_TEMP}/fakegh-${NAME}"
+          mkdir -p "${fake}/bin"
+          cat > "${fake}/bin/gh" <<'EOF'
+          #!/usr/bin/env bash
+          printf '%s\n' "$*" >> "${FAKE}/calls"
+          [ "${1:-}" = api ] || { echo "not gh api: $*" >&2; exit 99; }
+          shift
+          method=GET
+          path=""
+          while [ $# -gt 0 ]; do
+            case "$1" in
+              -X) method="$2"; shift 2 ;;
+              -f | -F) shift 2 ;;
+              --paginate) shift ;;
+              -*) echo "unknown flag: $1" >&2; exit 99 ;;
+              *) path="$1"; shift ;;
+            esac
+          done
+          case "${method} ${path}" in
+            "GET repos/zz/proof/pulls/7") cat "${FAKE}/pr.json" ;;
+            "GET repos/zz/proof/commits/abc123/check-runs?per_page=100") cat "${FAKE}/runs.json" ;;
+            "GET repos/zz/proof/commits/abc123/status") cat "${FAKE}/status.json" ;;
+            "PUT repos/zz/proof/pulls/7/merge") echo '{"sha":"feedface","merged":true}' ;;
+            "DELETE repos/zz/proof/git/refs/heads/zz-branch") ;;
+            *) echo "unexpected: ${method} ${path}" >&2; exit 98 ;;
+          esac
+          EOF
+          chmod +x "${fake}/bin/gh"
+          pr='{"number":7,"title":"fix: zz","state":"open","merged":false,"draft":false,"mergeable":true,"mergeable_state":"clean",
+            "body":"### Gates\r\n\r\n<!-- gate:ready-to-merge -->\r\n- [x] **Ready to merge** — Jamie ticks this.\r\n",
+            "head":{"ref":"zz-branch","sha":"abc123","repo":{"full_name":"zz/proof"}}}'
+          runs='{"check_runs":[{"id":1,"name":"ci","status":"completed","conclusion":"failure","output":{"title":null}},
+            {"id":2,"name":"ci","status":"completed","conclusion":"success","output":{"title":null}},
+            {"id":3,"name":"gate","status":"completed","conclusion":"skipped","output":{"title":null}}]}'
+          status='{"statuses":[{"id":1,"context":"Vercel","state":"success","description":"Deployment has completed"}]}'
+          # run_case <label> <pr filter> <runs filter> <status filter> <exit> <text>
+          run_case() {
+            rm -f "${fake}/calls"
+            jq "$2" <<<"$pr" > "${fake}/pr.json"
+            jq "$3" <<<"$runs" > "${fake}/runs.json"
+            jq "$4" <<<"$status" > "${fake}/status.json"
+            code=0
+            out="$(FAKE="$fake" GH_REPO=zz/proof PATH="${fake}/bin:${PATH}" bash .icm/scripts/merge.sh 7 2>&1)" || code=$?
+            [ "$code" -eq "$5" ] || { echo "::error::${NAME}: merge.sh, ${1}: exit ${code}, not ${5}"; echo "$out"; fail=1; }
+            grep -qF -- "$6" <<<"$out" || { echo "::error::${NAME}: merge.sh, ${1}: no line '${6}'"; echo "$out"; fail=1; }
+            ! grep -qi graphql "${fake}/calls" || { echo "::error::${NAME}: merge.sh, ${1}: a GraphQL call"; fail=1; }
+            if [ "$5" -ne 0 ] && grep -q '^api -X PUT' "${fake}/calls"; then
+              echo "::error::${NAME}: merge.sh, ${1}: it merged after a refusal"; fail=1
+            fi
+          }
+          run_case unticked '.body |= sub("\\[x\\]"; "[ ]")' . . 1 '#7: Ready to merge has no tick. Jamie ticks it'
+          run_case draft '.draft = true' . . 1 '#7: the pull request is a draft'
+          run_case closed '.state = "closed"' . . 1 '#7: the state is CLOSED, not open'
+          run_case merged '.state = "closed" | .merged = true' . . 1 '#7: the state is MERGED, not open'
+          run_case 'no check' . '.check_runs = []' '.statuses = []' 1 '#7: no check ran'
+          run_case 'a pending run' . '.check_runs[1].status = "in_progress"' . 1 '#7: the check ci is pending'
+          run_case 'a failed status' . . '.statuses[0].state = "failure"' 1 '#7: the check Vercel is failure'
+          run_case conflict '.mergeable = false' . . 1 '#7: the branch zz-branch conflicts with main'
+          run_case dirty '.mergeable_state = "dirty"' . . 1 '#7: the branch zz-branch conflicts with main'
+          run_case clean . . . 0 'merge commit: feedface'
+          for l in 'api -X PUT repos/zz/proof/pulls/7/merge -f merge_method=squash -f sha=abc123 -f commit_title=fix: zz (#7)' \
+            'api -X DELETE repos/zz/proof/git/refs/heads/zz-branch'; do
+            grep -qxF -- "$l" "${fake}/calls" || { echo "::error::${NAME}: merge.sh, clean: no call '${l}'"; cat "${fake}/calls"; fail=1; }
+          done
+          grep -qxF 'branch deleted: zz-branch' <<<"$out" || { echo "::error::${NAME}: merge.sh, clean: no deleted branch"; fail=1; }
+          run_case 'mergeable not computed' '.mergeable = null' . . 0 'merge commit: feedface'
+          [ "$(grep -cxF 'api repos/zz/proof/pulls/7' "${fake}/calls")" -eq 2 ] \
+            || { echo "::error::${NAME}: merge.sh does not read the pull request again when mergeable is null"; fail=1; }
           exit "$fail"
       - name: The router passes its fixture test
         if: matrix.workspace == 'false'
