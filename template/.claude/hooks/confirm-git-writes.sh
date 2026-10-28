@@ -147,7 +147,7 @@ printf '%s' "$cmd" | grep -Eq "${api}(${patch}${seg}${rpath}|${rpath}${seg}${pat
 # a field (-f, -F, --field, --raw-field, --input) and no method flag also asks. Each command
 # segment is read alone, because the method flag of one segment does not apply to another.
 while IFS= read -r s || [ -n "$s" ]; do
-  printf '%s' "$s" | grep -Eq "^[[:space:](]*gh[[:space:]]+api[[:space:]]${seg}[[:space:]]${bpath}${end}" || continue
+  printf '%s' "$s" | grep -Eq "^[[:space:](]*gh[[:space:]]+api${seg}[[:space:]]${bpath}${end}" || continue
   printf '%s' "$s" | grep -Eq "${opt}" && continue
   printf '%s' "$s" | grep -Eq "[[:space:]](-[fF]|--(raw-)?field|--input)" && hit="gh api branch merge"
 done < <(printf '%s' "$cmd" | tr ';&|' '\n\n\n')
