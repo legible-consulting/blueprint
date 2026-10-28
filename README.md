@@ -116,7 +116,9 @@ A build that answered `neon` carries the database shape. Any other answer render
 
 The shape in four sentences. The base is UAT's database with UAT, production's without. Every
 preview reads the base. A pull request that changes a migration gets a Neon branch cut from the
-base, with its data. A deployment migrates at build only where `MIGRATE_AT_BUILD` is `1`.
+base, with its data. A deployment migrates at build in two cases.
+`VERCEL_TARGET_ENV` names the environment that owns the base: `uat` with UAT, `production`
+without UAT. Or `preview-db.sh` set `MIGRATE_AT_BUILD=1` on its preview branch.
 
 ### The workspace
 
