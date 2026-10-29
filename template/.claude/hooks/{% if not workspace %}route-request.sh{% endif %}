@@ -220,7 +220,7 @@ case "$first_word" in
           route "two or more stubs carry the slug $slug: $(hit_list). Ask which one, then run .icm/scripts/new-run.sh <epic>/<slug> ($loop § The loop, step 2)."
         fi
         case "$tier" in
-          open) route "read the stub $hits, then run .icm/scripts/new-run.sh $(ticket_of) ($loop § The loop, step 2). When the branch $(branch_of) exists, new-run.sh refuses: resume at step 0." ;;
+          open) route "read the stub $hits, then run .icm/scripts/new-run.sh $(ticket_of) ($loop § The loop, step 2). On main, when the branch $(branch_of) exists, new-run.sh refuses: resume at step 0." ;;
           triage)
             lane="$(lane_of)"
             route "the open triage stub $hits. Read .icm/lanes/${lane:-<its lane>}/CONTEXT.md, then run .icm/scripts/new-run.sh $(ticket_of) (the lane line of the stub)." ;;
