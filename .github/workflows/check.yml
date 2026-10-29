@@ -49,7 +49,9 @@ jobs:
     # proof answer set: every default, every yes (monorepo, release, uat, database neon), release
     # no, a workspace, neon without uat, and mongodb with uat. A build must carry the ticket
     # convention, the pull request template with both gate anchors, the three skills, a
-    # CLAUDE.md under 80 lines and no BUILD.md. A uat render carries every UAT file and the
+    # CLAUDE.md under 80 lines, no BUILD.md, and README.md § Environments with five columns, a
+    # UAT row on uat yes only, and the Database and Moves on cells that the answers decide. A
+    # workspace has no such table. A uat render carries every UAT file and the
     # others none. A neon render carries every database file and the others none. Each build
     # carries the setup stubs its answers ask for, and no other. A workspace carries the three stage contracts, each with
     # Inputs, Process, Outputs and status: stub, one gate, and a ci.yml that asks for the
@@ -264,10 +266,46 @@ jobs:
           fi
           if [ "$UAT" = true ]; then
             grep -qF '.icm/uat/CONTEXT.md' CLAUDE.md || { echo "::error::${NAME}: CLAUDE.md does not route to .icm/uat/CONTEXT.md"; fail=1; }
-            grep -qF '## Environments' README.md || { echo "::error::${NAME}: README.md has no Environments table"; fail=1; }
           else
             ! grep -qF '.icm/uat/CONTEXT.md' CLAUDE.md || { echo "::error::${NAME}: CLAUDE.md routes to .icm/uat/CONTEXT.md"; fail=1; }
           fi
+          # README.md § Environments: the one home of where the build runs. Five columns. One
+          # Production row and one Preview row, and one UAT row with uat yes only. The Database
+          # cells name the Neon projects on neon and say none on none. Moves on follows the
+          # answers release and uat.
+          grep -qx '## Environments' README.md || { echo "::error::${NAME}: README.md has no Environments section"; fail=1; }
+          grep -qxF '| Environment | Address | Vercel project | Database | Moves on |' README.md \
+            || { echo "::error::${NAME}: README.md Environments lacks the five columns"; fail=1; }
+          rows() { grep -c "^| $1 | " README.md || true; }
+          [ "$(rows Production)" = 1 ] || { echo "::error::${NAME}: README.md has $(rows Production) Production rows (want 1)"; fail=1; }
+          [ "$(rows Preview)" = 1 ] || { echo "::error::${NAME}: README.md has $(rows Preview) Preview rows (want 1)"; fail=1; }
+          if [ "$UAT" = true ]; then want_uat=1; else want_uat=0; fi
+          [ "$(rows UAT)" = "$want_uat" ] || { echo "::error::${NAME}: README.md has $(rows UAT) UAT rows (want ${want_uat})"; fail=1; }
+          # cell <environment> <column number>: the trimmed cell of that row.
+          cell() { grep "^| $1 | " README.md | head -n 1 | awk -F' [|] ' -v c="$2" '{ sub(/ [|]$/, ""); print $c }'; }
+          envs=(Production Preview); [ "$UAT" = true ] && envs+=(UAT)
+          if [ "$DATABASE" = none ]; then
+            for e in "${envs[@]}"; do
+              [ "$(cell "$e" 4)" = none ] || { echo "::error::${NAME}: the ${e} Database cell is '$(cell "$e" 4)', not 'none'"; fail=1; }
+            done
+          fi
+          if [ "$neon" = true ]; then
+            [ "$(cell Production 4)" = 'the default branch of the Neon project `zz-proof`' ] \
+              || { echo "::error::${NAME}: the Production Database cell does not name the Neon project zz-proof"; fail=1; }
+            [ "$UAT" != true ] || [ "$(cell UAT 4)" = 'the default branch of the Neon project `uat-zz-proof`' ] \
+              || { echo "::error::${NAME}: the UAT Database cell does not name the Neon project uat-zz-proof"; fail=1; }
+            if [ "$UAT" = true ]; then p='uat-zz-proof'; else p='zz-proof'; fi
+            grep -qF "in \`${p}\`," <<<"$(cell Preview 4)" \
+              || { echo "::error::${NAME}: the Preview Database cell does not name the Neon project ${p}"; fail=1; }
+          fi
+          m="$(cell Production 5)"
+          if [ "$UAT" = true ]; then
+            grep -qF 'promote.sh run --tag' <<<"$m" || { echo "::error::${NAME}: Production does not move on promote.sh run: '${m}'"; fail=1; }
+            [ "$(cell UAT 5)" = 'every merge to `main`' ] || { echo "::error::${NAME}: UAT does not move on every merge to main"; fail=1; }
+          else
+            grep -qF 'every merge to `main`' <<<"$m" || { echo "::error::${NAME}: Production does not move on every merge to main: '${m}'"; fail=1; }
+          fi
+          [ "$(cell Preview 5)" = 'every push to the branch' ] || { echo "::error::${NAME}: Preview does not move on every push to the branch"; fail=1; }
           if [ "$RELEASE" = true ]; then
             grep -qF 'release.yml' .github/workflows/ci.yml || { echo "::error::${NAME}: ci.yml has no release job"; fail=1; }
           else
@@ -358,6 +396,8 @@ jobs:
           ! grep -qF 'release.yml' .github/workflows/ci.yml || { echo "::error::${NAME}: ci.yml has a release job"; fail=1; }
           lines="$(wc -l < CLAUDE.md)"
           [ "$lines" -lt 80 ] || { echo "::error::${NAME}: CLAUDE.md has ${lines} lines (limit 80)"; fail=1; }
+          # A workspace deploys nothing: its README.md has no Environments table.
+          ! grep -qx '## Environments' README.md || { echo "::error::${NAME}: a workspace README.md has an Environments section"; fail=1; }
           ! grep -rqE '(^|[^$])\{\{|\{%' CLAUDE.md README.md .gitignore .github ./*/CONTEXT.md \
             || { echo "::error::${NAME}: an unrendered Jinja tag remains"; fail=1; }
           exit "$fail"
