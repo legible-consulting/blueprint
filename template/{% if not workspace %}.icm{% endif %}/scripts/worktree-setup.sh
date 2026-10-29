@@ -3,7 +3,7 @@
 #
 # Usage: bash .icm/scripts/worktree-setup.sh
 #
-# goose-task, the lane script of legible-consulting/house (core/setup/goose-task.sh), runs this
+# ticket, the lane script of legible-consulting/house (core/setup/ticket.sh), runs this
 # script in the new worktree before it starts the lane's agent, so the agent finds node_modules
 # on its first command.
 # The script finds the lockfile at the root of the repository and runs one install command:
