@@ -5,52 +5,5 @@ An ICM workspace, rendered in coaching with Legible Consulting. The map: `CLAUDE
 stages: `01-collect/`, `02-draft/`, `03-deliver/`, each with its `CONTEXT.md`.
 {%- else -%}
 Built by Legible Consulting. Tickets: `.icm/intake/`. Conventions: `CLAUDE.md`.
-{%- set project = '<the Vercel project of one app>' if monorepo else '<the Vercel project>' %}
-{%- if uat %}
-{%- set production_moves = '`promote.sh run --tag <tag>`, on Jamie\'s word' %}
-{%- elif release %}
-{%- set production_moves = 'every merge to `main`. The release tag follows on Jamie\'s word `release`' %}
-{%- else %}
-{%- set production_moves = 'every merge to `main`. The merge is the release' %}
-{%- endif %}
-{%- if database == 'neon' %}
-{%- set production_db = 'the default branch of the Neon project `' ~ slug ~ '`' %}
-{%- set uat_db = 'the default branch of the Neon project `uat-' ~ slug ~ '`' %}
-{%- set preview_db = 'the Neon branch `preview/<branch>` in `' ~ ('uat-' if uat else '') ~ slug ~ '`, made by the Neon integration' %}
-{%- elif database == 'none' %}
-{%- set production_db = 'none' %}
-{%- set uat_db = 'none' %}
-{%- set preview_db = 'none' %}
-{%- else %}
-{%- set production_db = "<production's database>" %}
-{%- set uat_db = "<the UAT database, apart from production's>" %}
-{%- set preview_db = '<the database a preview reads>' %}
-{%- endif %}
-
-## Environments
-
-| Environment | Address | Vercel project | Database | Moves on |
-|---|---|---|---|---|
-| Production | <the production domain> | {{ project }} | {{ production_db }} | {{ production_moves }} |
-{%- if uat %}
-| UAT | <https://uat.the production domain> | {{ project }} | {{ uat_db }} | every merge to `main` |
-{%- endif %}
-| Preview | the pull request's Vercel preview | {{ project }} | {{ preview_db }} | every push to the branch |
-
-This table is the one home of where the build runs. The blueprint's files read it and never
-repeat it.
-{%- if monorepo %}
-A monorepo has one row per environment and Vercel project. Copy the rows of each environment
-once for each app that deploys.
-{%- endif %}
-{%- if uat or database == 'neon' %}
-Each setup stub in `.icm/intake/setup/` names the cells that it fills.
-{%- endif %}
-A person fills each `<…>` cell that no setup stub fills, when the project or the domain exists.
-{%- if uat %}
-The contract: `.icm/uat/CONTEXT.md`.
-{%- endif %}
-{%- if database == 'neon' %}
-The database contract: `.icm/database/CONTEXT.md`.
-{%- endif %}
+Where the build runs (the addresses, the Vercel projects, the databases): `.icm/environments.md`.
 {%- endif %}

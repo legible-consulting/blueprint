@@ -35,6 +35,7 @@ Every build carries these files, whatever its answers:
 |---|---|
 | `CLAUDE.md`, `README.md`, `.gitignore` | the routing table and the rules, the build's own page, the ignore list. Written once |
 | `.copier-answers.yml` | the answers and the blueprint tag |
+| `.icm/environments.md` | where the build runs: one table of the environments, with the address, the Vercel project, the database and what moves each one. Rendered from the answers. The blueprint's, so `copier update` merges a new tag into it and a filled cell stays filled |
 | `.icm/intake/` | the ticket convention: `CONTEXT.md` (the contract and the loop), `README.md`, the empty `_done/` folders |
 | `.icm/lanes/<lane>/CONTEXT.md` | the four lanes for a one-off: `bug`, `tweak`, `chore`, `hotfix` |
 | `.icm/scripts/` | `new-run.sh` (with `--ready` and `--dry-run`), `close-out.sh`, `checks.sh`, `merge.sh`, `release.sh`, and `lib/github.sh`. Each GitHub call is REST, through `gh api`, because a Claude Code cloud session gets HTTP 403 on GraphQL |

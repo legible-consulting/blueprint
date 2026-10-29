@@ -1,8 +1,8 @@
 # check: the blueprint's walk test. Six proof answer sets render on each pull request and on
 # each push to main (five builds and one workspace), the rendered workflows, hooks and scripts are linted, and every
 # functionality question is checked for a default and a help line (CI is truth; never run
-# locally). The update job updates a render of v0.6.0 and of v0.8.0 to HEAD and compares the
-# result with a fresh HEAD render. The ste job compares the vendored writing skill with its
+# locally). The update job updates a render of v0.6.0, of v0.8.0 and of the commit that put the
+# environments table in README.md to HEAD, and compares the result with a fresh HEAD render. The ste job compares the vendored writing skill with its
 # pinned commit.
 name: check
 
@@ -49,9 +49,9 @@ jobs:
     # proof answer set: every default, every yes (monorepo, release, uat, database neon), release
     # no, a workspace, neon without uat, and mongodb with uat. A build must carry the ticket
     # convention, the pull request template with both gate anchors, the three skills, a
-    # CLAUDE.md under 80 lines, no BUILD.md, and README.md § Environments with five columns, a
-    # UAT row on uat yes only, and the Database and Moves on cells that the answers decide. A
-    # workspace has no such table. A uat render carries every UAT file and the
+    # CLAUDE.md under 80 lines, no BUILD.md, and .icm/environments.md with five columns, a
+    # UAT row on uat yes only, and the Database and Moves on cells that the answers decide. The
+    # build's README.md has no table and names the file. A workspace has no such file. A uat render carries every UAT file and the
     # others none. A neon render carries every database file and the others none. Each build
     # carries the setup stubs its answers ask for, and no other. A workspace carries the three stage contracts, each with
     # Inputs, Process, Outputs and status: stub, one gate, and a ci.yml that asks for the
@@ -307,20 +307,28 @@ jobs:
           else
             ! grep -qF '.icm/uat/CONTEXT.md' CLAUDE.md || { echo "::error::${NAME}: CLAUDE.md routes to .icm/uat/CONTEXT.md"; fail=1; }
           fi
-          # README.md § Environments: the one home of where the build runs. Five columns. One
-          # Production row and one Preview row, and one UAT row with uat yes only. The Database
-          # cells name the Neon projects on neon and say none on none. Moves on follows the
-          # answers release and uat.
-          grep -qx '## Environments' README.md || { echo "::error::${NAME}: README.md has no Environments section"; fail=1; }
-          grep -qxF '| Environment | Address | Vercel project | Database | Moves on |' README.md \
-            || { echo "::error::${NAME}: README.md Environments lacks the five columns"; fail=1; }
-          rows() { grep -c "^| $1 | " README.md || true; }
-          [ "$(rows Production)" = 1 ] || { echo "::error::${NAME}: README.md has $(rows Production) Production rows (want 1)"; fail=1; }
-          [ "$(rows Preview)" = 1 ] || { echo "::error::${NAME}: README.md has $(rows Preview) Preview rows (want 1)"; fail=1; }
+          # .icm/environments.md: the one home of where the build runs, a file the blueprint owns,
+          # so copier update reaches every build. Five columns. One Production row and one
+          # Preview row, and one UAT row with uat yes only. The Database cells name the Neon
+          # projects on neon and say none on none. Moves on follows the answers release and uat.
+          # README.md has no table and one line that names the file.
+          envf=.icm/environments.md
+          if [ ! -f "$envf" ]; then
+            echo "::error::${NAME}: ${envf} does not exist"; fail=1; envf=/dev/null
+          fi
+          ! grep -qx '## Environments' README.md || { echo "::error::${NAME}: README.md has an Environments section; the table is in .icm/environments.md"; fail=1; }
+          ! grep -qF '| Environment | ' README.md || { echo "::error::${NAME}: README.md has an environments table"; fail=1; }
+          [ "$(grep -cF '`.icm/environments.md`' README.md || true)" = 1 ] \
+            || { echo "::error::${NAME}: README.md does not name .icm/environments.md on one line"; fail=1; }
+          grep -qxF '| Environment | Address | Vercel project | Database | Moves on |' "$envf" \
+            || { echo "::error::${NAME}: ${envf} lacks the five columns"; fail=1; }
+          rows() { grep -c "^| $1 | " "$envf" || true; }
+          [ "$(rows Production)" = 1 ] || { echo "::error::${NAME}: ${envf} has $(rows Production) Production rows (want 1)"; fail=1; }
+          [ "$(rows Preview)" = 1 ] || { echo "::error::${NAME}: ${envf} has $(rows Preview) Preview rows (want 1)"; fail=1; }
           if [ "$UAT" = true ]; then want_uat=1; else want_uat=0; fi
-          [ "$(rows UAT)" = "$want_uat" ] || { echo "::error::${NAME}: README.md has $(rows UAT) UAT rows (want ${want_uat})"; fail=1; }
+          [ "$(rows UAT)" = "$want_uat" ] || { echo "::error::${NAME}: ${envf} has $(rows UAT) UAT rows (want ${want_uat})"; fail=1; }
           # cell <environment> <column number>: the trimmed cell of that row.
-          cell() { grep "^| $1 | " README.md | head -n 1 | awk -F' [|] ' -v c="$2" '{ sub(/ [|]$/, ""); print $c }'; }
+          cell() { grep "^| $1 | " "$envf" | head -n 1 | awk -F' [|] ' -v c="$2" '{ sub(/ [|]$/, ""); print $c }'; }
           envs=(Production Preview); [ "$UAT" = true ] && envs+=(UAT)
           if [ "$DATABASE" = none ]; then
             for e in "${envs[@]}"; do
@@ -434,8 +442,10 @@ jobs:
           ! grep -qF 'release.yml' .github/workflows/ci.yml || { echo "::error::${NAME}: ci.yml has a release job"; fail=1; }
           lines="$(wc -l < CLAUDE.md)"
           [ "$lines" -lt 80 ] || { echo "::error::${NAME}: CLAUDE.md has ${lines} lines (limit 80)"; fail=1; }
-          # A workspace deploys nothing: its README.md has no Environments table.
+          # A workspace deploys nothing: no .icm/environments.md, and no table in README.md.
+          [ ! -e .icm/environments.md ] || { echo "::error::${NAME}: a workspace has .icm/environments.md"; fail=1; }
           ! grep -qx '## Environments' README.md || { echo "::error::${NAME}: a workspace README.md has an Environments section"; fail=1; }
+          ! grep -qF 'environments.md' README.md || { echo "::error::${NAME}: a workspace README.md names an environments file"; fail=1; }
           ! grep -rqE '(^|[^$])\{\{|\{%' CLAUDE.md README.md .gitignore .github ./*/CONTEXT.md \
             || { echo "::error::${NAME}: an unrendered Jinja tag remains"; fail=1; }
           exit "$fail"
@@ -914,7 +924,10 @@ jobs:
     # marker remains, _commit is HEAD's, the files equal a fresh HEAD render with the same
     # answers in content and executable bit, no file of the old render stays that HEAD does not
     # render, and each written-once file keeps the old render's content. A failure names the
-    # file. The tag v1.0.0 waits on this job.
+    # file. The tag v1.0.0 waits on this job. from-readme-table starts at 57d9e94, the commit
+    # that rendered the environments table into README.md, a written-once file. No tag holds
+    # that commit: v1.1.0 is the commit before it. The update adds .icm/environments.md, equal
+    # to a fresh HEAD render, and leaves that README.md as it was, table and all.
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -927,6 +940,10 @@ jobs:
           - name: from-v0.8.0
             ref: v0.8.0
             old_answers: monorepo=false release=true uat=true
+            new_answers: workspace=false monorepo=false release=true uat=true database=neon
+          - name: from-readme-table
+            ref: 57d9e94924a913c81e9eaab8458c849600e274cd
+            old_answers: workspace=false monorepo=false release=true uat=true database=neon
             new_answers: workspace=false monorepo=false release=true uat=true database=neon
     env:
       NAME: ${{ matrix.name }}
@@ -1039,6 +1056,21 @@ jobs:
           done < <(LC_ALL=C comm -12 <(echo "$fu") <(echo "$fr"))
           echo "Compared ${n} files."
           [ "$n" -gt 0 ] || err "no file was compared"
+          exit "$fail"
+      - name: The update adds the environments file and keeps the README's table
+        if: matrix.name == 'from-readme-table'
+        # 57d9e94 rendered the table into README.md. The update must add .icm/environments.md
+        # with the table, and must not touch README.md: the old table stays until a person
+        # removes it.
+        run: |
+          fail=0
+          up="${RUNNER_TEMP}/old"
+          snap="${RUNNER_TEMP}/snapshot"
+          [ ! -e "${snap}/.icm/environments.md" ] || { echo "::error::the 57d9e94 render already has .icm/environments.md"; fail=1; }
+          grep -qx '## Environments' "${snap}/README.md" || { echo "::error::the 57d9e94 render has no table in README.md, so this proof proves nothing"; fail=1; }
+          grep -qxF '| Environment | Address | Vercel project | Database | Moves on |' "${up}/.icm/environments.md" \
+            || { echo "::error::the update did not add .icm/environments.md with the five columns"; fail=1; }
+          cmp -s "${snap}/README.md" "${up}/README.md" || { echo "::error::the update changed README.md"; fail=1; }
           exit "$fail"
       - name: A done setup stub stays done, and a new answer adds its stubs
         if: matrix.name == 'from-v0.8.0'
