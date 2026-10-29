@@ -360,8 +360,15 @@ the tick · 2026-10-28). The `pr-conventions` skill names the REST call for each
    `priority`, then the first by file name. With one epic open and no `## Order`, start at
    that epic's `breakdown.md`.
 2. **Start it with the script.** `.icm/scripts/new-run.sh <epic>/<slug>` (or
-   `triage/<slug>`) cuts the branch `<slug>` (or `triage/<slug>`) from `main`, moves the stub
-   into its `_done/` and pushes. Then it opens the draft pull request from
+   `triage/<slug>`) finds the ticket's branch from where it runs:
+   - On `main`, it cuts the branch `<slug>` (or `triage/<slug>`) from `origin/main`.
+   - In a worktree on another branch, that branch is the ticket's branch. The lane script made
+     the worktree on it. The script makes no branch.
+   - On a detached HEAD, it stops.
+
+   The script cuts a branch only from `main` (why: one ticket is one branch, and in a worktree
+   the branch exists before the session · 2026-10-29). Then it moves the stub into its
+   `_done/`, commits and pushes the branch. Then it opens the draft pull request from
    `.github/pull_request_template.md`, with the ticket path and the acceptance criteria filled
    in. The move is a status mark, not a gate. The merge makes it true.
 3. **Spec approved.** The script keeps the gate for a `medium`, `high` or `research` stub and

@@ -58,7 +58,8 @@ jobs:
     # contract check, and no build file. A build carries session-start.sh, registered, and it
     # prints the board of a fixture. A workspace carries neither. actionlint reads the rendered workflows and shellcheck the rendered
     # hooks and scripts, so a template error fails here and not in a client repo. In a build,
-    # new-run.sh --dry-run runs on a fixture stub and must leave the tree as it was, merge.sh
+    # new-run.sh --dry-run runs on a fixture stub and must leave the tree as it was. On main it
+    # cuts the branch, on another branch it keeps it, and on a detached HEAD it stops. merge.sh
     # keeps each refusal against a fake gh that serves REST only, and the router passes its
     # fixture test. The git-writes guard asks before a REST merge or ref delete, and stays
     # silent for merge.sh and a read. In `all`, a monorepo with UAT and Neon, rollback.sh runs
@@ -67,10 +68,7 @@ jobs:
     # NEON_PROJECT_ID, NEON_API_KEY or MIGRATE_AT_BUILD. In each neon build, vercel-build.sh
     # migrates on the right environments against a fake npm. In a monorepo with Neon, the
     # contract's buildCommand migrates before turbo starts, in a fixture Turborepo.
-    # In a build, .emdash.json parses with jq, runs the install through scripts.prepare, and
-    # keeps preservePatterns with .env and .env.local and nothing else. Each entry is a literal
-    # path that git check-ignore ignores in the render. A workspace has neither .emdash.json
-    # nor the setup script.
+    # A build has the worktree setup script, executable. A workspace has none.
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -124,40 +122,17 @@ jobs:
           [ "$(grep -c . <<<"$deny")" -eq 12 ] \
             || { echo "::error::${NAME}: the deny list has $(grep -c . <<<"$deny") rules, not 12"; fail=1; }
           exit "$fail"
-      - name: The Emdash files are in a build and in no workspace
+      - name: The worktree setup script is in a build and in no workspace
         working-directory: ${{ runner.temp }}/zz-${{ matrix.name }}
-        # Emdash reads .emdash.json when it makes a task worktree. A template error must fail
-        # here and not in a client repo. The setup script is not run: a proof render has no lockfile.
+        # The lane script runs it in each new ticket worktree. The script is not run here: a
+        # proof render has no lockfile.
         run: |
-          fail=0
+          f=.icm/scripts/worktree-setup.sh
           if [ "${WORKSPACE}" = "true" ]; then
-            for f in .emdash.json .icm/scripts/worktree-setup.sh; do
-              [ ! -e "$f" ] || { echo "::error::${NAME}: $f must not exist in a workspace"; fail=1; }
-            done
-            exit "$fail"
+            [ ! -e "$f" ] || { echo "::error::${NAME}: $f must not exist in a workspace"; exit 1; }
+            exit 0
           fi
-          jq -e . .emdash.json >/dev/null \
-            || { echo "::error::${NAME}: .emdash.json does not parse as JSON"; exit 1; }
-          [ "$(jq -r '.scripts.prepare' .emdash.json)" = "bash .icm/scripts/worktree-setup.sh" ] \
-            || { echo "::error::${NAME}: scripts.prepare is not 'bash .icm/scripts/worktree-setup.sh'"; fail=1; }
-          [ -x .icm/scripts/worktree-setup.sh ] \
-            || { echo "::error::${NAME}: .icm/scripts/worktree-setup.sh is missing or not executable"; fail=1; }
-          jq -e '(.preservePatterns | sort) == [".env", ".env.local"]' .emdash.json >/dev/null \
-            || { echo "::error::${NAME}: preservePatterns is not exactly .env and .env.local"; fail=1; }
-          # git check-ignore needs a repository, and the render is not one. A scratch repository
-          # takes the rendered .gitignore.
-          repo="$(mktemp -d)"
-          git init -q "$repo"
-          cp .gitignore "$repo/.gitignore"
-          while IFS= read -r p; do
-            case "$p" in
-              *[\*\?\[\]\{\}!]* | /* | ./* | */)
-                echo "::error::${NAME}: preservePatterns entry '${p}' is not a literal path"; fail=1; continue ;;
-            esac
-            git -C "$repo" check-ignore -q -- "$p" \
-              || { echo "::error::${NAME}: preservePatterns entry '${p}' is not ignored by .gitignore"; fail=1; }
-          done < <(jq -r '.preservePatterns[]' .emdash.json)
-          exit "$fail"
+          [ -x "$f" ] || { echo "::error::${NAME}: $f is missing or not executable"; exit 1; }
       - name: The rendered build keeps the conventions
         if: matrix.workspace == 'false'
         working-directory: ${{ runner.temp }}/zz-${{ matrix.name }}
@@ -612,6 +587,27 @@ jobs:
           done
           ! grep -qF 'Spec approved' <<<"$out" || { echo "::error::${NAME}: the triage dry run keeps the Spec approved gate"; fail=1; }
           [ "$(git status --porcelain --untracked-files=all)" = "$st" ] || { echo "::error::${NAME}: the triage dry run changed the working tree"; fail=1; }
+          grep -qxF 'case: main. The run cuts the branch from origin/main.' <<<"$out" \
+            || { echo "::error::${NAME}: the dry run on main does not name the main case"; fail=1; }
+          rm .icm/intake/triage/zz-fix.md
+          # A worktree on the ticket's branch: the run keeps the branch and makes no branch.
+          wt="${RUNNER_TEMP}/wt-${NAME}"
+          git worktree add -q -b zz-stub "$wt" HEAD
+          out="$(cd "$wt" && PATH="${nogh}:${PATH}" bash .icm/scripts/new-run.sh zz-epic/zz-stub --dry-run)" \
+            || { echo "::error::${NAME}: the dry run in a worktree failed"; fail=1; }
+          for l in 'case: worktree. The run keeps the current branch and makes no branch.' 'branch: zz-stub' \
+            'base: none. The branch exists.'; do
+            grep -qxF -- "$l" <<<"$out" || { echo "::error::${NAME}: the worktree dry run does not print '${l}'"; fail=1; }
+          done
+          [ -z "$(git -C "$wt" status --porcelain)" ] || { echo "::error::${NAME}: the worktree dry run changed the working tree"; fail=1; }
+          [ "$(git -C "$wt" symbolic-ref --short HEAD)" = zz-stub ] || { echo "::error::${NAME}: the worktree dry run changed the branch"; fail=1; }
+          # A detached HEAD: the run stops and names the cause.
+          git -C "$wt" switch -q --detach
+          if err="$(cd "$wt" && PATH="${nogh}:${PATH}" bash .icm/scripts/new-run.sh zz-epic/zz-stub --dry-run 2>&1)"; then
+            echo "::error::${NAME}: the dry run on a detached HEAD did not stop"; fail=1
+          fi
+          grep -qF 'HEAD is detached' <<<"$err" || { echo "::error::${NAME}: the detached dry run does not name the cause"; fail=1; }
+          git worktree remove --force "$wt"
           exit "$fail"
       - name: merge.sh uses the REST API and keeps each refusal
         if: matrix.workspace == 'false'

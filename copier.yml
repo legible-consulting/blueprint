@@ -10,7 +10,8 @@ _answers_file: .copier-answers.yml
 # list of names and grows the same way. Copier writes each once and never overwrites it. Every
 # other rendered file is the blueprint's: the ticket contract (.icm/intake/CONTEXT.md), the UAT
 # contract, the database contract, the table of where the build runs (.icm/environments.md),
-# the pull request template, the guards, the scripts, the workflows, and a build's Emdash files (.emdash.json and .icm/scripts/worktree-setup.sh).
+# the pull request template, the guards, the scripts (a build's .icm/scripts/worktree-setup.sh
+# too), and the workflows.
 _skip_if_exists:
   - README.md
   - .icm/intake/README.md
