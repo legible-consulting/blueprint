@@ -8,6 +8,12 @@
 
 The integration makes each preview's database: a Neon branch `preview/<git branch>`, made
 before the build, and deleted with the git branch. No script of this build does it.
+{%- if monorepo %}
+
+The branch name comes from the git branch, not from the Vercel project.
+So one pull request has one Neon branch, and each app of the pull request reads it. Connect
+each app to the same Neon projects.
+{%- endif %}
 
 ## Steps
 
@@ -37,5 +43,9 @@ Do these steps on each Vercel project of the build that reads the database:
       before its first build.
 - [ ] Its preview build log shows `[vercel-build] VERCEL_TARGET_ENV=preview: migrate, verify,
       then build`.
+{%- if monorepo %}
+- [ ] A pull request that changes two apps gets one Neon branch, and the build log of each app
+      shows the endpoint of that branch, not the endpoint of the default branch.
+{%- endif %}
 - [ ] Preview has no `DATABASE_URL` for all branches.
 - [ ] Production reads `{{ slug }}`.
