@@ -410,6 +410,8 @@ the new one · Jamie, 2026-10-27).
      the preview.
    - Fill `What changes` and `How to test`. Remove `Questions` when there is none. Write
      `None` under `Parked` when the pull request adds no stub.
+   Flip the pull request to ready. No REST call does the flip (`pr-conventions` says why): name
+   it under `Operator:` in the stop report, and Jamie flips it on GitHub.
    Tick nothing. Stop with the stop report (§ The stop report).
 7. **Jamie tests the preview** and ticks **Ready to merge**. Then the session runs
    `.icm/scripts/merge.sh <n>`, on `merge <slug>`, or in the session that built the ticket
