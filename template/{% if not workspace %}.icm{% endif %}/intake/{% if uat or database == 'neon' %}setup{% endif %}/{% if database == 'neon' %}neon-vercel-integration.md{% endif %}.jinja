@@ -10,9 +10,9 @@ The integration makes each preview's database: a Neon branch `preview/<git branc
 before the build, and deleted with the git branch. No script of this build does it.
 {%- if monorepo %}
 
-The branch name comes from the git branch, not from the Vercel project. So one pull request
-has one Neon branch, and each app of the pull request reads it. Connect each app to the same
-Neon projects.
+The branch name comes from the git branch, not from the Vercel project.
+So one pull request has one Neon branch, and each app of the pull request reads it. Connect
+each app to the same Neon projects.
 {%- endif %}
 
 ## Steps
