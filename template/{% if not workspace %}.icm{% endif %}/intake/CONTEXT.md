@@ -407,9 +407,12 @@ the new one · Jamie, 2026-10-27).
 7. **Jamie tests the preview** and ticks **Ready to merge**. Then the session runs
    `.icm/scripts/merge.sh <n>`, on `merge <slug>`, or in the session that built the ticket
    when Jamie says so. The script refuses without the tick. Read `ci` on `main` once. Say what
-   moved: the UAT address where `.icm/uat/CONTEXT.md` exists, production otherwise (why: Jamie
-   ticks from the phone, and the session does the mechanics · Jamie, 2026-10-27). Where
-   `.icm/uat/CONTEXT.md` exists, production moves on the promotion that contract describes.
+   moved, and name its address from the root `README.md` § Environments: the UAT row where
+   `.icm/uat/CONTEXT.md` exists, the Production row otherwise. Never guess an address. A cell
+   that holds `<…>` is not filled: say so (why: Jamie ticks from the phone, and the session
+   does the mechanics · Jamie, 2026-10-27. The table is the one home of the addresses ·
+   2026-10-29). Where `.icm/uat/CONTEXT.md` exists, production moves on the promotion that
+   contract describes.
 
 Gates are human checkboxes. Read them. Never tick them. The merge after the tick is the
 session's.

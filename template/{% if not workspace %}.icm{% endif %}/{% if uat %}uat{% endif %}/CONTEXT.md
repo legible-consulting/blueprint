@@ -40,6 +40,11 @@ ticket from stub to production.
   `https://uat.<the production domain>` by convention. The client bookmarks it once (why: one
   address, always on, always holding the whole batch. A branch needs merges in two directions
   · 2026-10-23).
+- **The addresses are in `README.md` § Environments.** Each environment's address, Vercel
+  project and database are in that table, one row per environment and Vercel project. This
+  contract and the scripts never repeat them. A session that names the UAT address reads it
+  from the UAT row (why: a reader with no platform token needs the address, and one home does
+  not drift · Jamie, 2026-10-29).
 - **Production does not follow `main`.** The project's "Auto-assign Custom Production Domains"
   is off. Every merge still builds a production deployment, and that deployment stays staged. It
   serves nothing until the promotion (why: the client signs the batch off before anything
@@ -81,7 +86,7 @@ production's rows. The one write to production is the promotion, on Jamie's word
   deployment of that head and the staged production build of it. It prints the dispatch
   command when a release tag waits for its promotion.
 - **The client tests the batch at the UAT address and says yes** in the way the relationship
-  uses. The session records it on Jamie's word: `.icm/scripts/promote.sh approve --by "<who>"
+  uses. The address is in the UAT row of `README.md` § Environments. The session records it on Jamie's word: `.icm/scripts/promote.sh approve --by "<who>"
   [--note "<their words>"]`. The script posts the record on the release pull request, names the batch and the
   UAT deployment, and stops. It ticks nothing and merges nothing (why: the script records the word
   where the merge happens. So a reader of the pull request sees who said yes and to what ·
