@@ -273,6 +273,18 @@ jobs:
             grep -qxF '"vercel-build": "bash .icm/scripts/vercel-build.sh next build"' "$f" \
               || { echo "::error::${NAME}: ${f} lacks the vercel-build line that calls the script"; fail=1; }
             grep -qF 'advisory lock' "$f" || { echo "::error::${NAME}: ${f} does not name the advisory lock of db:migrate"; fail=1; }
+            # The integration gives all the apps of one pull request one Neon branch. The stub
+            # says it in a monorepo only.
+            grep -qF 'One pull request has one Neon branch' "$f" \
+              || { echo "::error::${NAME}: ${f} does not say that one pull request has one Neon branch"; fail=1; }
+            s=.icm/intake/setup/neon-vercel-integration.md
+            if [ "$MONOREPO" = true ]; then
+              grep -qF 'one pull request has one Neon branch' "$s" \
+                || { echo "::error::${NAME}: ${s} does not say that one pull request has one Neon branch"; fail=1; }
+            else
+              ! grep -qF 'one pull request has one Neon branch' "$s" \
+                || { echo "::error::${NAME}: ${s} has the monorepo text without monorepo"; fail=1; }
+            fi
           else
             ! grep -qF '.icm/database/CONTEXT.md' CLAUDE.md || { echo "::error::${NAME}: CLAUDE.md routes to .icm/database/CONTEXT.md"; fail=1; }
             [ ! -e .env.example ] || ! grep -q '^DATABASE_URL' .env.example \
