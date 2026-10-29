@@ -30,6 +30,8 @@
 # Reads: gh (signed in), git, jq, curl, VERCEL_TOKEN, and VERCEL_TEAM, UAT_ENVIRONMENT when set.
 # Without VERCEL_TOKEN, status prints what git and GitHub know, and approve and run refuse. The GitHub reads and the record use the REST API only, through
 # lib/github.sh, which says why. The contract is .icm/uat/CONTEXT.md.
+# The addresses, the Vercel projects and the databases that a person reads are in
+# .icm/environments.md. This script reads Vercel and git, never that file.
 # Exit: 0 reported, recorded or dispatched · 1 an error · 3 a refusal, named on stderr, RESULT: STOP.
 set -euo pipefail
 
@@ -47,7 +49,7 @@ while [ $# -gt 0 ]; do
     --by) by="${2:-}"; shift 2 ;;
     --note) note="${2:-}"; shift 2 ;;
     --tag) tag="${2:-}"; shift 2 ;;
-    -h|--help) sed -n '2,34p' "${BASH_SOURCE[0]}"; exit 0 ;;
+    -h|--help) sed -n '2,36p' "${BASH_SOURCE[0]}"; exit 0 ;;
     *) die "unknown argument: $1 (usage: promote.sh [status] | approve --by \"<who>\" [--note \"<text>\"] | run --tag <tag>)" ;;
   esac
 done

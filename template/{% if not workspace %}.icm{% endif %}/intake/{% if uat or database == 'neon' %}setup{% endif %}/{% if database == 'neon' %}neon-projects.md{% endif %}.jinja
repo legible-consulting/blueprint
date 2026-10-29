@@ -18,7 +18,7 @@ Each preview gets a branch of it.{% endif %}
 3. Make the project `uat-{{ slug }}` for UAT, in the same region.
 4. Put test data only in `uat-{{ slug }}`. Never copy production's rows into it.
 {%- endif %}
-{% if uat %}5{% else %}3{% endif %}. Compare the project names with the column `Database` of `README.md` § Environments.
+{% if uat %}5{% else %}3{% endif %}. Compare the project names with the column `Database` of `.icm/environments.md`.
    If a name is different, correct the column.
 
 ## Done when
@@ -27,4 +27,4 @@ Each preview gets a branch of it.{% endif %}
 {%- if uat %}
 - [ ] The project `uat-{{ slug }}` exists, with test data only.
 {%- endif %}
-- [ ] The column `Database` of `README.md` § Environments names `{{ slug }}`{% if uat %} and `uat-{{ slug }}`{% endif %}.
+- [ ] The column `Database` of `.icm/environments.md` names `{{ slug }}`{% if uat %} and `uat-{{ slug }}`{% endif %}.

@@ -407,7 +407,7 @@ the new one · Jamie, 2026-10-27).
 7. **Jamie tests the preview** and ticks **Ready to merge**. Then the session runs
    `.icm/scripts/merge.sh <n>`, on `merge <slug>`, or in the session that built the ticket
    when Jamie says so. The script refuses without the tick. Read `ci` on `main` once. Say what
-   moved, and name its address from the root `README.md` § Environments: the UAT row where
+   moved, and name its address from `.icm/environments.md`: the UAT row where
    `.icm/uat/CONTEXT.md` exists, the Production row otherwise. Never guess an address. A cell
    that holds `<…>` is not filled: say so (why: Jamie ticks from the phone, and the session
    does the mechanics · Jamie, 2026-10-27. The table is the one home of the addresses ·
