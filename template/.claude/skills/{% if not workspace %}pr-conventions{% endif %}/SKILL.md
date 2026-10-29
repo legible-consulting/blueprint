@@ -70,8 +70,12 @@ Every GitHub call is REST: `gh api`, `gh run` or `gh workflow run`. Never `gh pr
   Never write a body from a local copy (why: Jamie ticks the gates on GitHub, and a stale copy
   removes the ticks · 2026-10-27).
 - Set the title: `gh api -X PATCH repos/{owner}/{repo}/pulls/<n> -f title="<title>"`.
-- Flip a draft to ready: `gh api -X POST repos/{owner}/{repo}/pulls/<n>/ccr/ready_for_review`. If
-  the call fails, say so in the stop report. Then Jamie flips it on GitHub.
+- No REST call flips a draft to ready. `POST pulls/<n>/ready_for_review` does not exist in the
+  REST API and returns 404. `PATCH pulls/<n>` with `draft=false` returns 200 and changes
+  nothing: the REST API treats `draft` as read-only. Only the GraphQL mutation
+  `markPullRequestReadyForReview` flips it, and GraphQL returns HTTP 403 for a cloud session.
+  Do not try either REST call. Name the flip under `Operator:` in the stop report. Jamie flips
+  it on GitHub.
 - Never tick a gate box. Remove a tick only where the contract's § Revise says so.
 - Keep each gate anchor as it is. The desk finds the gates by their anchors.
 
