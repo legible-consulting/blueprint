@@ -164,6 +164,7 @@ jobs:
         run: |
           fail=0
           need() { [ -e "$1" ] || { echo "::error::${NAME}: missing $1"; fail=1; }; }
+          need AGENTS.md
           need CLAUDE.md
           need README.md
           need .gitignore
@@ -396,6 +397,7 @@ jobs:
           fail=0
           need() { [ -e "$1" ] || { echo "::error::${NAME}: missing $1"; fail=1; }; }
           never() { [ ! -e "$1" ] || { echo "::error::${NAME}: $1 must not exist"; fail=1; }; }
+          need AGENTS.md
           need CLAUDE.md
           need README.md
           need .gitignore
