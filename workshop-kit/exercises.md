@@ -164,7 +164,8 @@ Hour 7, the walk test. Source: `03_automate-it-keep-your-judgment/03_keep-it-use
 
 **Steps.**
 
-1. Run the checks in `walk-test.md`, in order.
+1. Run the checks in `walk-test.md`, in order. A machine runs check 2 too: see the slide
+   "A contract a machine can check".
 2. When a check fails, correct the workspace. Run the check again.
 3. Look at your sorted week from exercise 1 again. Choose the next job for a workspace, and
    one job you leave alone.

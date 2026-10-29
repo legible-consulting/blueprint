@@ -343,6 +343,26 @@ Your workspace passes when:
 
 Then you hand it on: a copy, or one shared place where you agree who changes what.
 
+---
+
+## A contract a machine can check
+
+A person reads the words. A machine reads the shape, on every change:
+
+1. **Three sections.** Each `CONTEXT.md` has `## Inputs`, `## Process` and `## Outputs`.
+2. **A status.** Each contract says if it is a `stub` or `built`. A built contract has no placeholder line.
+3. **A home for each file.** Each contract names the files it holds. A file that no contract holds is clutter.
+
+A workspace from this blueprint gets the first check from CI. Add the other two when the folder grows.
+
+Three faults that the walk test already catches:
+
+- **No routing table**: the map does not send a job to a stage (walk test 1).
+- **No Inputs**: the stage does not say what to load (walk test 2 and 3).
+- **A monolithic stage**: one stage does everything and writes no one file (walk test 4).
+
+<!-- source: the anti-pattern lists of https://github.com/mcmespinaa/folder-structure-protocol (README, "8 Base Anti-Patterns" and "6 ICM Anti-Patterns") -->
+
 → Exercise 7
 
 ---
