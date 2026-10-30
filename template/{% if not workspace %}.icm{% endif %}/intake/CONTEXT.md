@@ -219,7 +219,7 @@ with each update, so no person forgets an act · Jamie, 2026-10-28).
 ### The order of the epics
 
 The build order says which stub of an epic goes first. It does not say which epic goes first.
-When two or more epics are open, `README.md` holds that order under `## Order`. A session
+When two or more epics are open, `.icm/intake/README.md` holds that order under `## Order`. A session
 never sets the order on a guess (why: epics cut at the same time compete for the same weeks.
 The order is Jamie's call · 2026-10-25).
 
@@ -264,6 +264,25 @@ Set by Jamie on <YYYY-MM-DD>.
 - **A new epic gets a place.** A session that cuts an epic while `## Order` exists asks where
   the new line goes, with the table, and writes the answer.
 
+### Decisions
+
+A rule that binds every epic of this repo lives in `.icm/intake/README.md`, under
+`## Decisions`. A rule of one epic stays in its `breakdown.md`. A rule of one ticket stays in
+its stub.
+
+```md
+## Decisions
+
+- <the rule, one sentence> (why: <the reason> · <who>, <YYYY-MM-DD>).
+```
+
+- **One line per rule.** No ID, no number. A changed rule is edited in place. Git keeps the
+  old line (why: the history of a rule is the history of its line · Jamie, 2026-10-30).
+- **The session that writes the rule writes the line, on Jamie's word.** A session never adds
+  a line on a guess.
+- **Give each rule its why**, in the file's own style: `(why: <the reason> · <who>,
+  <YYYY-MM-DD>)`.
+
 ### A user story
 
 A client's document that asks for work, a user story most often, follows one path from the
@@ -288,10 +307,11 @@ client's words to the stubs:
 - **Every stub of the epic carries `- story: <n>`** after `- epic:`. With no story, the line is
   absent (why: the pull request, the stub and the story stay linked without a
   ticket number · 2026-10-23).
-- **A story that only states rules for the whole product** becomes decisions of record in
-  `README.md`, not an epic. The breakdowns name the decisions they rest on (why: a rule that
-  binds every epic has one home. An epic for it would never close · 2026-10-23).
-- **`README.md` lists the stories in order** with their epic slug and state. The client's
+- **A story that only states rules for the whole product** becomes a line in
+  `.icm/intake/README.md` § Decisions, not an epic. The breakdowns name the decisions they rest
+  on (why: a rule that binds every epic has one home. An epic for it would never close ·
+  2026-10-23).
+- **`.icm/intake/README.md` lists the stories in order** with their epic slug and state. The client's
   list and the backlog then read the same (why: the client asks "where is my story 12?" and the
   answer is one row · 2026-10-23).
 
@@ -353,7 +373,7 @@ the tick · 2026-10-28). The `pr-conventions` skill names the REST call for each
 
    No branch and no pull request: stop and say so. Never open a second branch or pull request
    for one slug (why: a second one orphans the first · 2026-10-27).
-1. **Take the next stub.** Read `README.md` § Order. Take the first line that has a ready
+1. **Take the next stub.** Read `.icm/intake/README.md` § Order. Take the first line that has a ready
    stub. A stub that a link across epics moves forward goes first. In an epic, read
    `breakdown.md`, then take the open stub with the lowest `sequence` whose `depends-on` is in
    `_done/` and that has no `blocked:` line. In `triage`, take the open stub with the highest
