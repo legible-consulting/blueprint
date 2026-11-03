@@ -1,0 +1,1 @@
+../../../build/.claude/hooks/confirm-git-writes.sh

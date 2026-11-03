@@ -17,7 +17,8 @@ The blueprint is MIT licensed: see `LICENSE`.
 
 | Folder | Holds |
 |---|---|
-| `template/` | the one template root: the files a build renders. `{{ _copier_conf.answers_file }}.jinja` records the answers |
+| `template/build/` | the root of a build: every file a build renders. `{{ _copier_conf.answers_file }}.jinja` records the answers |
+| `template/workspace/` | the root of a workspace: the map, the three stage contracts, and the files it shares with a build, as symlinks into `template/build/` |
 | `conventions/` | what a rendered repo must keep: `CLAUDE.md` shape, tickets, pull requests and gates, commits, writing, CI, guards, secrets, UAT |
 | `workshop-kit/` | the one-day workshop: the slides (Marp), the exercises and the walk test |
 
@@ -36,7 +37,8 @@ Every build carries these files, whatever its answers:
 | `CLAUDE.md`, `README.md`, `.gitignore` | the routing table and the rules, the build's own page, the ignore list. Written once |
 | `.copier-answers.yml` | the answers and the blueprint tag |
 | `.icm/environments.md` | where the build runs: one table of the environments, with the address, the Vercel project, the database and what moves each one. Rendered from the answers. The blueprint's, so `copier update` merges a new tag into it and a filled cell stays filled |
-| `.icm/intake/` | the ticket convention: `CONTEXT.md` (the contract and the loop), `README.md`, the empty `_done/` folders |
+| `.icm/intake/` | the ticket convention: `CONTEXT.md` (the rules of the folder and the loop), `README.md`, the empty `_done/` folders |
+| `.icm/references/` | the shapes the loop writes, one file each: `stub.md`, `breakdown.md`, `triage-stub.md`, `setup-stub.md`, and `epics.md` (the order of the epics, the decisions, a user story) |
 | `.icm/lanes/<lane>/CONTEXT.md` | the four lanes for a one-off: `bug`, `tweak`, `chore`, `hotfix` |
 | `.icm/scripts/` | `new-run.sh` (with `--ready` and `--dry-run`), `close-out.sh`, `checks.sh`, `merge.sh`, `release.sh`, and `lib/github.sh`. Each GitHub call is REST, through `gh api`, because a Claude Code cloud session gets HTTP 403 on GraphQL |
 | `.github/pull_request_template.md` | the pull request body, the two gates at the top |
@@ -64,14 +66,15 @@ update never touches them.
 
 ### One ticket convention
 
-The contract, `.icm/intake/CONTEXT.md`, is the blueprint's and stands alone. It holds the stub,
-the breakdown, the triage stub, the writing rules and the loop from stub to merge. There is no
-`BUILD.md`.
+The contract, `.icm/intake/CONTEXT.md`, is the blueprint's: the rules of the folder, the writing
+rules and the loop from stub to merge. The shape of each thing the loop writes is one file in
+`.icm/references/`, read when a session writes one and not before. There is no `BUILD.md`.
 
 ### The skills
 
 A build carries three skills in `.claude/skills/`. Claude Code loads each one from its
-`SKILL.md`. A workspace carries none. The contract holds every shape. A skill adds no shape.
+`SKILL.md`. A workspace carries none. The contract and `.icm/references/` hold every shape. A
+skill adds no shape.
 
 | Skill | Adds |
 |---|---|
@@ -143,7 +146,11 @@ workspace must pass.
 
 ### How a file renders only on yes
 
-A file or folder named `{% if uat %}name{% endif %}` renders to an empty name on no, and copier
-skips it. The build's own paths (`.icm/`, the pull request template) carry
-`{% if not workspace %}` in the same way. Copier copies the content of such a file as is unless its name ends in `.jinja`, so a
-workflow's `${{ }}` expressions stay untouched.
+`workspace` picks the root: `_subdirectory` in `copier.yml` is `template/workspace/` on yes and
+`template/build/` on no, so neither root carries the other's files. Inside `template/build/`, a
+file or folder named `{% if uat %}name{% endif %}` renders to an empty name on no, and copier
+skips it. Copier copies the content of such a file as is unless its name ends in `.jinja`, so a
+workflow's `${{ }}` expressions stay untouched. The files a workspace shares with a build (the
+agent map, the three guards, the answers file, the ignore list) are symlinks from
+`template/workspace/` into `template/build/`: copier reads a symlink through, so each has one
+home.

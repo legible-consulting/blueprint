@@ -1,27 +1,27 @@
-# Legible Consulting — client template. One root, template/. It renders a client build, or with
-# workspace yes a client's ICM workspace. The questions below decide what renders: a file or
-# folder whose name carries a question renders only on yes.
+# Legible Consulting — client template. Two roots under template/: build/ renders a client
+# build, workspace/ renders a client's ICM workspace. The answer to workspace picks the root.
+# Inside build/, a file or folder whose name carries a question renders only on yes.
 _min_copier_version: "9.0.0"
-_subdirectory: template
+_subdirectory: "template/{% if workspace %}workspace{% else %}build{% endif %}"
 _answers_file: .copier-answers.yml
 # A rendered repo owns its README.md, its .icm/intake/README.md (what is true of this backlog:
 # the epics, `## Decisions`), its CLAUDE.md and its .gitignore: the routing table and
 # the ignore list grow with the code. A UAT or Neon build's .env.example is the build's own
 # list of names and grows the same way. Copier writes each once and never overwrites it. Every
-# other rendered file is the blueprint's: the ticket contract (.icm/intake/CONTEXT.md), the UAT
-# contract, the database contract, the table of where the build runs (.icm/environments.md),
-# the pull request template, the guards, the scripts (a build's .icm/scripts/worktree-setup.sh
-# too), and the workflows.
+# other rendered file is the blueprint's: the ticket contract (.icm/intake/CONTEXT.md) and its
+# shapes (.icm/references/), the UAT contract, the database contract, the table of where the
+# build runs (.icm/environments.md), the pull request template, the guards, the scripts, and
+# the workflows.
 _skip_if_exists:
   - README.md
   - .icm/intake/README.md
   - CLAUDE.md
   - .gitignore
-  - "{% if uat or database == 'neon' %}.env.example{% endif %}"
+  - .env.example
   # A workspace's stage contracts are the client's from the first coaching hour.
-  - "{% if workspace %}01-collect{% endif %}/CONTEXT.md"
-  - "{% if workspace %}02-draft{% endif %}/CONTEXT.md"
-  - "{% if workspace %}03-deliver{% endif %}/CONTEXT.md"
+  - 01-collect/CONTEXT.md
+  - 02-draft/CONTEXT.md
+  - 03-deliver/CONTEXT.md
 
 slug:
   type: str

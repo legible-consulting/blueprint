@@ -122,17 +122,6 @@ jobs:
           [ "$(grep -c . <<<"$deny")" -eq 12 ] \
             || { echo "::error::${NAME}: the deny list has $(grep -c . <<<"$deny") rules, not 12"; fail=1; }
           exit "$fail"
-      - name: The worktree setup script is in a build and in no workspace
-        working-directory: ${{ runner.temp }}/zz-${{ matrix.name }}
-        # The lane script runs it in each new ticket worktree. The script is not run here: a
-        # proof render has no lockfile.
-        run: |
-          f=.icm/scripts/worktree-setup.sh
-          if [ "${WORKSPACE}" = "true" ]; then
-            [ ! -e "$f" ] || { echo "::error::${NAME}: $f must not exist in a workspace"; exit 1; }
-            exit 0
-          fi
-          [ -x "$f" ] || { echo "::error::${NAME}: $f is missing or not executable"; exit 1; }
       - name: The rendered build keeps the conventions
         if: matrix.workspace == 'false'
         working-directory: ${{ runner.temp }}/zz-${{ matrix.name }}
@@ -146,6 +135,9 @@ jobs:
           need .copier-answers.yml
           need .icm/intake/CONTEXT.md
           need .icm/intake/README.md
+          for r in stub breakdown triage-stub setup-stub epics; do
+            need ".icm/references/${r}.md"
+          done
           need .icm/intake/_done/.gitkeep
           need .icm/intake/triage/_done/.gitkeep
           need .github/pull_request_template.md
@@ -1125,7 +1117,7 @@ jobs:
           git -C "${RUNNER_TEMP}/ste" checkout -q "$STE_SKILL_SHA"
       - name: The vendored copy equals the pinned commit
         run: |
-          diff -r -x .git "${RUNNER_TEMP}/ste" "template/.claude/skills/{% if not workspace %}asd-ste100{% endif %}" \
+          diff -r -x .git "${RUNNER_TEMP}/ste" "template/build/.claude/skills/asd-ste100" \
             || { echo "::error::the vendored asd-ste100 is not the same as ${STE_SKILL_SHA}"; exit 1; }
 
   questions:
@@ -1164,6 +1156,6 @@ jobs:
           git -C /tmp/ste checkout -q "$STE_SKILL_SHA"
       - name: Lint every markdown file, as advice
         run: |
-          out="$(git ls-files -z '*.md' '*.md.jinja' ':!:template/.claude/skills/*asd-ste100*' | xargs -0 python3 -I /tmp/ste/scripts/ste-lint.py 2>&1 || true)"
+          out="$(git ls-files -z '*.md' '*.md.jinja' ':!:template/build/.claude/skills/asd-ste100/*' | xargs -0 python3 -I /tmp/ste/scripts/ste-lint.py 2>&1 || true)"
           { echo '## Simplified Technical English (advice)'; echo; echo '```'; echo "$out"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
           echo "$out"

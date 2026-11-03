@@ -1,0 +1,21 @@
+# ci: the workspace's contract check, defined once in legible-consulting/.github: every
+# CONTEXT.md keeps Inputs, Process and Outputs (CI is truth; never run locally).
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-{% raw %}${{ github.ref }}{% endraw %}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    uses: legible-consulting/.github/.github/workflows/check-client.yml@main
+    with:
+      workspace: true
