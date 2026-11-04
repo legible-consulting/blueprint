@@ -1,0 +1,1 @@
+../../../build/.claude/hooks/guard-plaintext-secrets.sh

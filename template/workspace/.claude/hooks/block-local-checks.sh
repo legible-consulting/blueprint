@@ -1,0 +1,1 @@
+../../../build/.claude/hooks/block-local-checks.sh
